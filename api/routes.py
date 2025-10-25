@@ -1,5 +1,7 @@
 """API routes"""
 from fastapi import FastAPI, Query, Body
+
+from adapters.graph_adapter import get_substitutes
 from core.services.user_service import (
     ensure_bootstrap_user, get_user_info, create_or_update_user,
     get_all_users, set_user_pantry, get_user_pantry
@@ -54,3 +56,9 @@ def recipes_search(ingredient: str = Query(None), name: str = Query(None),
 @app.get("/plan", response_model=Plan)
 def plan(user: str = "Anna", ingredient: str = Query(...), top_n: int = 10):
     return generate_plan_for_ingredient(user, ingredient, top_n=top_n)
+
+# ---------- Substitutions ----------
+@app.get("/substitute/{ingredient}")
+def substitute(ingredient: str, limit: int = 10):
+    subs = get_substitutes(ingredient, limit=limit)
+    return {"ingredient": ingredient, "substitutes": subs}
