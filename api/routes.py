@@ -1,0 +1,56 @@
+"""API routes"""
+from fastapi import FastAPI, Query, Body
+from core.services.user_service import (
+    ensure_bootstrap_user, get_user_info, create_or_update_user,
+    get_all_users, set_user_pantry, get_user_pantry
+)
+from core.services.recipe_service import find_recipes_by_ingredient, find_recipes_by_name
+from core.services.planner_service import generate_plan_for_ingredient
+from api.schemas import RecipeSearchResponse, Plan
+
+app = FastAPI(title="SmartMeal API", version="1.0.0",
+              description="Personalized meal planning with PostgreSQL + MongoDB + Neo4j")
+
+@app.on_event("startup")
+def bootstrap():
+    ensure_bootstrap_user()
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# ---------- Users ----------
+@app.get("/users")
+def users():
+    return get_all_users()
+
+@app.get("/users/{name}")
+def user(name: str):
+    return get_user_info(name)
+
+@app.post("/users")
+def upsert_user(name: str = Body(...), goal: str = Body(...)):
+    return create_or_update_user(name, goal)
+
+@app.put("/users/{name}/pantry")
+def put_pantry(name: str, items: list[str] = Body(..., embed=True)):
+    return {"pantry": set_user_pantry(name, items)}
+
+@app.get("/users/{name}/pantry")
+def get_pantry_api(name: str):
+    return {"pantry": get_user_pantry(name)}
+
+# ---------- Recipes ----------
+@app.get("/recipes/search", response_model=RecipeSearchResponse)
+def recipes_search(ingredient: str = Query(None), name: str = Query(None),
+                   page: int = 1, size: int = 10):
+    if ingredient:
+        return find_recipes_by_ingredient(ingredient, page=page, size=size)
+    if name:
+        return find_recipes_by_name(name, page=page, size=size)
+    return {"data": [], "meta": {"page": 1, "size": 10, "total": 0, "pages": 0}}
+
+# ---------- Planner ----------
+@app.get("/plan", response_model=Plan)
+def plan(user: str = "Anna", ingredient: str = Query(...), top_n: int = 10):
+    return generate_plan_for_ingredient(user, ingredient, top_n=top_n)

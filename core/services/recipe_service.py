@@ -1,7 +1,14 @@
-from adapters.mongo_adapter import search_recipes
-from adapters.graph_adapter import get_substitute
+"""Recipe service"""
+from adapters.mongo_adapter import search_recipes_by_ingredient, search_recipes_by_name
+from core.utils.helpers import rank_recipes, paginate
 
-def find_recipes(ingredient: str):
-    recipes = search_recipes(ingredient)
-    substitutes = get_substitute(ingredient)
-    return {"recipes": recipes, "alternatives": substitutes}
+def find_recipes_by_ingredient(ingredient: str, goal: str = "High Protein Meals", page: int = 1, size: int = 10):
+    raw = search_recipes_by_ingredient(ingredient)
+    ranked = rank_recipes(raw, goal, top_n=200)
+    data, meta = paginate(ranked, page=page, size=size)
+    return {"data": data, "meta": meta}
+
+def find_recipes_by_name(name: str, page: int = 1, size: int = 10):
+    raw = search_recipes_by_name(name)
+    data, meta = paginate(raw, page=page, size=size)
+    return {"data": data, "meta": meta}
