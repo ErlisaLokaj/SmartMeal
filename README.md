@@ -54,14 +54,14 @@ docker exec smartmeal-neo4j-1 cypher-shell -u neo4j -p smartmeal-neo4j \
 
 ## Example API Requests
 
-| Description | Method & Path |
-|------------|----------------|
-| List users | `GET /users` |
-| Create user | `POST /users {"name":"Anna","goal":"High Protein Meals"}` |
-| Update pantry | `PUT /users/Anna/pantry {"items":["rice"]}` |
-| Search recipes | `GET /recipes/search?ingredient=chicken` |
-| Generate plan | `GET /plan?user=Anna&ingredient=chicken&top_n=5` |
-| Ingredient substitutions | `GET /substitute/chicken?limit=10` |
+| Description                       | Method & Path                                             |
+|-----------------------------------|-----------------------------------------------------------|
+| List users                        | `GET /users`                                              |
+| Create user                       | `POST /users {"name":"Anna","goal":"High Protein Meals"}` |
+| Update pantry                     | `PUT /users/Anna/pantry {"items":["rice"]}`               |
+| Search recipes by ingredient name | `GET /recipes/chicken`                                    |
+| Generate plan                     | `GET /plan/Anna/chicken`                                  |
+| Ingredient substitutions          | `GET /substitute/chicken`                                 |
 
 ---
 
