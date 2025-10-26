@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:14
@@ -29,11 +27,13 @@ services:
       retries: 20
 
   neo4j:
-    image: neo4j:5
+    image: neo4j:5.9
     environment:
       NEO4J_AUTH: neo4j/smartmeal-neo4j
       NEO4J_server_default__listen__address: 0.0.0.0
       NEO4J_server_default__advertised__address: neo4j
+      NEO4J_server_directories_import: /var/lib/neo4j/import
+      NEO4J_dbms_security_allow__csv__import__from__file__urls: "true"
     ports:
       - "7474:7474"  # Browser
       - "7687:7687"  # Bolt
