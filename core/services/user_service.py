@@ -8,8 +8,8 @@ log = logging.getLogger("smartmeal.users")
 
 def ensure_bootstrap_user():
     init_postgres()
-    upsert_user("Anna", "High Protein Meals")
-    log.info("bootstrap_user_ready name=Anna goal='High Protein Meals'")
+    init_postgres()
+    log.info("db_initialized")
 
 def create_or_update_user(name: str, goal: str):
     upsert_user(name, goal)

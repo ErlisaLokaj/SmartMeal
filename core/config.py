@@ -5,7 +5,7 @@ load_dotenv()
 
 POSTGRES_DB_URL = os.getenv(
     "POSTGRES_DB_URL",
-    "postgresql+psycopg2://erlisalokaj@localhost:5432/smartmeal"
+    "postgresql+psycopg2://smartmeal:smartmeal@localhost:5432/smartmeal"
 )
 
 

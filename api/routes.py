@@ -7,6 +7,8 @@ logging.basicConfig(
 )
 from adapters.sql_adapter import init_postgres
 from fastapi import FastAPI, Query, Body
+from adapters.sql_adapter import engine
+from adapters.graph_adapter import close as close_neo4j
 
 
 from adapters.graph_adapter import get_substitutes
@@ -24,7 +26,18 @@ app = FastAPI(title="SmartMeal API", version="1.0.0",
 @app.on_event("startup")
 def bootstrap():
     init_postgres()
-    ensure_bootstrap_user()
+
+@app.on_event("shutdown")
+def shutdown_event():
+    try:
+        engine.dispose()
+    except Exception:
+        pass
+    try:
+        close_neo4j()
+    except Exception:
+        pass
+
 
 @app.get("/health")
 def health():
