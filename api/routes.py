@@ -63,7 +63,9 @@ def recipes_search(ingredient: str = Query(None), name: str = Query(None),
 
 # ---------- Planner ----------
 @app.get("/plan", response_model=Plan)
-def plan(user: str = "Anna", ingredient: str = Query(...), top_n: int = 10):
+def plan(user: str = Query(..., description="User name"),
+         ingredient: str = Query(..., description="Main ingredient"),
+         top_n: int = 10):
     return generate_plan_for_ingredient(user, ingredient, top_n=top_n)
 
 # ---------- Substitutions ----------
