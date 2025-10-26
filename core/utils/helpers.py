@@ -3,6 +3,7 @@ SmartMeal utility functions
 """
 
 from __future__ import annotations
+import re
 from typing import Iterable, List, Dict, Any, Tuple, Optional
 
 
@@ -12,6 +13,8 @@ STOPWORDS = {"fresh", "chopped", "diced", "minced", "ground", "large", "small",
              "cup", "cups", "tbsp", "tablespoon", "tablespoons", "tsp", "teaspoon",
              "teaspoons", "ounce", "ounces", "oz", "gram", "grams", "ml", "ltr",
              "package", "packages", "can", "cans"}
+
+
 
 UNIT_ALIASES = {
     "tbs": "tbsp", "tbl": "tbsp", "tbls": "tbsp", "tablespoons": "tbsp",
@@ -23,7 +26,7 @@ def normalize_text(s: str) -> str:
     """Basic normalization: lowercase, collapse spaces, strip punctuation edges."""
     import re
     s = s.lower().strip()
-    s = re.sub(r"[()\[\],.;:]+", " ", s)  # light punctuation removal
+    s = re.sub(r"[()\[\],.;:]+", " ", s)
     s = re.sub(r"\s+", " ", s)
     return s.strip()
 
@@ -32,29 +35,63 @@ def normalize_unit(token: str) -> str:
     t = token.lower().strip(".")
     return UNIT_ALIASES.get(t, t)
 
+DESCRIPTORS = {
+    "beaten", "chopped", "diced", "minced", "sliced", "crushed", "ground",
+    "fresh", "large", "small", "medium", "optional", "boiled", "mashed",
+    "drained", "washed", "prepared", "cooked", "baked", "fried"
+}
+
+def singularize(word: str) -> str:
+    if word.endswith("ies"):
+        return word[:-3] + "y"
+    if word.endswith("oes"):
+        return word[:-2]
+    if word.endswith("s") and len(word) > 3:
+        return word[:-1]
+    return word
+
+
 def normalize_ingredient(ingredient: str) -> str:
-    """
-    Normalize a single ingredient string:
-    - lowercase
-    - remove obvious quantities/units
-    - drop simple descriptors
-    """
-    import re
     s = normalize_text(ingredient)
+    s = re.sub(r"\b\d+([./-]\d+)?\b", " ", s)
+    s = re.sub(r"\b(c|lb|pkg|can|oz|g|kg|ml|l|cups?|tbsp|tsp)\b", " ", s)
 
-    # remove obvious numeric quantities like "2", "1/2", "3-4", "250g", "10 oz"
-    s = re.sub(r"\b\d+([./-]\d+)?\b", " ", s)         # 2, 1/2, 3-4
-    s = re.sub(r"\b\d+\s?(oz|g|kg|ml|l|cups?|tbsp|tsp)\b", " ", s)
-
-    # strip unit aliases to reduce noise
     tokens = [normalize_unit(t) for t in s.split()]
-    tokens = [t for t in tokens if t not in STOPWORDS]
+    tokens = [t for t in tokens if t not in STOPWORDS and t not in DESCRIPTORS]
 
-    # heuristic: drop trailing noise words like "optional", "to", "taste"
-    NOISE = {"optional", "to", "taste"}
-    tokens = [t for t in tokens if t not in NOISE]
+    NOISE = {"optional", "to", "taste", "and", "drain", "washed", "wash", "in", "no", "&", "m"}
+    tokens = [t for t in tokens if t not in NOISE and len(t) > 1]
 
-    return " ".join(tokens).strip()
+    s = " ".join(tokens)
+    s = re.sub(r"\b(wash(ed)?|drain(ed)?)\b", "", s)
+    s = re.sub(r"\bsauce\b", "", s)
+    s = re.sub(r"\s+", " ", s).strip()
+
+
+    if " of " in s and len(s.split()) > 5:
+        s = s.split(" of ")[-1]
+
+
+    if "salt" in s and "pepper" in s:
+        s = "salt and pepper"
+
+    tokens = [singularize(t) for t in s.split()]
+    s = " ".join(tokens).strip()
+    return s
+
+
+def fuzzy_contains(a: str, b: str) -> bool:
+    a_tokens = a.split()
+    b_tokens = b.split()
+    for t1 in a_tokens:
+        for t2 in b_tokens:
+            if t1 == t2:
+                return True
+            if t1 in t2 or t2 in t1:
+                if len(t1) >= 4 or len(t2) >= 4:
+                    return True
+    return False
+
 
 def normalize_ingredients(ingredients: Iterable[str]) -> List[str]:
     """Normalize a list of ingredient strings."""
@@ -75,11 +112,6 @@ GOAL_KEYWORDS = {
 }
 
 def score_recipe_against_goal(recipe: Dict[str, Any], goal: str) -> float:
-    """
-    Tiny heuristic scorer:
-    +1 for each goal keyword found in ingredients (normalized)
-    slight bonus for shorter steps (simplicity)
-    """
     ingredients = normalize_ingredients(recipe.get("ingredients", []))
     goal_key = goal.lower()
     # map goal to a keyword set
@@ -98,10 +130,8 @@ def score_recipe_against_goal(recipe: Dict[str, Any], goal: str) -> float:
 
     steps = recipe.get("steps", [])
     if steps:
-        # fewer steps → slightly higher score (ease of cooking)
         score += max(0.0, 5.0 - min(5.0, len(steps))) * 0.1
 
-    # cap/normalize (not strictly necessary)
     return float(score)
 
 def rank_recipes(recipes: List[Dict[str, Any]], goal: str, top_n: int = 10) -> List[Dict[str, Any]]:
@@ -118,20 +148,26 @@ def safe_sample(items: List[Any], n: int) -> List[Any]:
 # Shopping list helpers
 
 def build_shopping_list(recipes: List[Dict[str, Any]], pantry: Optional[Iterable[str]] = None) -> Dict[str, List[str]]:
-    """
-    Create a basic shopping list from selected recipes.
-    - Normalizes ingredient names
-    - Dedupes
-    - Splits into 'need' vs 'have' using an optional pantry list
-    """
-    pantry_norm = set(normalize_ingredient(p) for p in (pantry or []))
+    pantry_norm = [normalize_ingredient(p) for p in (pantry or [])]
     all_ings = []
     for r in recipes:
         all_ings += normalize_ingredients(r.get("ingredients", []))
 
     unique = sorted({i for i in all_ings if i})
-    need = [i for i in unique if i not in pantry_norm]
-    have = [i for i in unique if i in pantry_norm]
+    need, have = [], []
+
+    for ing in unique:
+        ing_tokens = set(ing.split())
+        matched = False
+        for p in pantry_norm:
+            p_tokens = set(p.split())
+            if ing_tokens & p_tokens:
+                matched = True
+                break
+        if matched:
+            have.append(ing)
+        else:
+            need.append(ing)
 
     return {"need": need, "have": have}
 
@@ -139,11 +175,7 @@ def build_shopping_list(recipes: List[Dict[str, Any]], pantry: Optional[Iterable
 # Serialization utilities
 
 def to_jsonable(obj: Any) -> Any:
-    """
-    Convert common SmartMeal objects to JSON-serializable types.
-    Works with dicts, lists, Pydantic models, and simple domain models exposing .to_dict().
-    """
-    from pydantic import BaseModel  # local import to avoid hard dependency at import time
+    from pydantic import BaseModel
 
     if obj is None:
         return None

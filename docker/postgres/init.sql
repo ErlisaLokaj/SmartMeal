@@ -1,10 +1,21 @@
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  goal TEXT,
-  pantry TEXT[]
+  name VARCHAR(50) UNIQUE NOT NULL,
+  goal VARCHAR(100)
 );
 
-INSERT INTO users (name, goal)
-VALUES ('Anna', 'High Protein Meals')
-ON CONFLICT (name) DO UPDATE SET goal = EXCLUDED.goal;
+CREATE TABLE IF NOT EXISTS pantry (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  item TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS meal_plan (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title TEXT,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_name ON users(name);
+CREATE INDEX IF NOT EXISTS idx_pantry_user ON pantry(user_id);
