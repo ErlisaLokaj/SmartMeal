@@ -40,6 +40,15 @@ entity user_preference {
   strength : pref_strength
 }
 
+entity meal_entry_recipe_snapshot {
+  * meal_entry_id : UUID <<PK, FK meal_entry.meal_entry_id>>
+  --
+  base_recipe_id : UUID <<REF MongoDB::recipes._id>>
+  ingredients : jsonb
+  steps : jsonb
+  created_at : timestamptz
+}
+
 entity pantry_item {
   * pantry_item_id : UUID <<PK>>
   --
@@ -120,6 +129,7 @@ entity waste_log {
 }
 
 ' Multiplicities shown in quotes:
+meal_entry "1" ||--|| "1" meal_entry_recipe_snapshot
 app_user "1" ||--o{ "0..1" dietary_profile
 app_user "1" ||--o{ "0..*" user_allergy
 app_user "1" ||--o{ "0..*" user_preference

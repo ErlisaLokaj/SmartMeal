@@ -1,4 +1,4 @@
-@startuml
+@startuml Weekly Plan + Substitutions + Shopping List
 title Weekly Plan + Substitutions + Shopping List
 
 autonumber
@@ -28,8 +28,7 @@ loop For each candidate recipe ingredient
   alt Conflicts found
     S -> NJ: suggestSubstitutions(ingredientId)
     NJ --> S: ranked substitutes
-    S -> MG: patchRecipeWithSubstitution(recipeId, altIngredient)
-    MG --> S: patched recipe
+    S -> S: buildSubstitutionMap(recipeId, conflictingId -> altIngredient)
   end
 end
 
@@ -41,6 +40,9 @@ S --> C: final plan (recipes per day/slot)
 
 C -> PG: save meal_plan + meal_entries
 PG --> C: plan_id
+
+' NEW: persist resolved recipe snapshots for each entry
+S -> PG: insert meal_entry_recipe_snapshot[*] { meal_entry_id, base_recipe_id, ingredients, steps }
 
 == Shopping list ==
 User -> FE: Create shopping list

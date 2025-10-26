@@ -13,6 +13,14 @@ package "PostgreSQL" {
   updated_at : timestamptz
   }
 
+  class meal_entry_recipe_snapshot {
+  + meal_entry_id : UUID <<PK, FK meal_entry.meal_entry_id>>
+  base_recipe_id : UUID <<REF MongoDB::recipes._id>>
+  ingredients : jsonb
+  steps : jsonb
+  created_at : timestamptz
+}
+
   class meal_entry {
     * meal_entry_id : UUID <<PK>>
     --
@@ -95,6 +103,7 @@ package "Neo4j" {
 }
 
 ' Cross-DB soft links
+meal_entry --> meal_entry_recipe_snapshot : meal_entry_id = meal_entry_id
 meal_entry --> recipes : recipe_id = _id
 shopping_list_item --> recipes : from_recipe_id = _id
 pantry_item --> Ingredient : ingredient_id = id
