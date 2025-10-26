@@ -8,7 +8,7 @@ def generate_plan_for_ingredient(user_name: str, ingredient: str, top_n: int = 1
     user = get_user(user_name) or {"name": user_name, "goal": "Balanced"}
     recipes = search_recipes_by_ingredient(ingredient)
     ranked = rank_recipes(recipes, user["goal"], top_n=top_n)
-    subs = get_substitutes(ingredient)  # requires Neo4j data loaded
+    subs = get_substitutes(ingredient)
     pantry = get_pantry(user_name)
     shopping = build_shopping_list(ranked, pantry=pantry)
     return {

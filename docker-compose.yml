@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: smartmeal
+      POSTGRES_USER: smartmeal
+      POSTGRES_PASSWORD: smartmeal
+    ports: ["5432:5432"]
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smartmeal -d smartmeal"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  neo4j:
+    image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/smartmeal-neo4j
+      NEO4J_server_default__listen__address: 0.0.0.0
+      NEO4J_server_default__advertised__address: neo4j
+    ports:
+      - "7474:7474"  # Browser
+      - "7687:7687"  # Bolt
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'RETURN 1' | cypher-shell -u neo4j -p smartmeal-neo4j || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  app:
+    build: .
+    env_file: .env
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_healthy }
+      neo4j: { condition: service_healthy }
+    ports: ["8000:8000"]
+    # For live code reload during dev, uncomment:
+    # command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    # volumes:
+    #   - .:/app
+
+volumes:
+  pg_data:
+  mongo_data:
+  neo4j_data:

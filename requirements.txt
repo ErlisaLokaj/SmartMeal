@@ -1,8 +1,9 @@
 fastapi
 uvicorn
-pydantic>=2
-sqlalchemy
-psycopg2-binary
 pymongo
 neo4j
+SQLAlchemy
+psycopg2-binary
 python-dotenv
+pydantic
+
