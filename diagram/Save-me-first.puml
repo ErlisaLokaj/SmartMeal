@@ -1,0 +1,34 @@
+@startuml SaveMeFirst
+title Daily Save-me-first Suggestions (Food-waste Minimizer)
+
+autonumber
+actor "Scheduler" as CRON
+participant "Controller" as C
+participant "Waste Service" as W
+database "PostgreSQL\n(pantry, plans, waste)" as PG
+database "MongoDB\n(recipes)" as MG
+database "Neo4j\n(ingredients graph)" as NJ
+participant "Notifier" as NTF
+
+CRON -> C: triggerDailySaveMeFirst()
+C -> W: buildSaveMeFirst(userId)
+
+W -> PG: getExpiringPantry(userId, horizon=3d)
+PG --> W: expiring items
+
+loop For each expiring ingredient
+  W -> NJ: findRecipesUsing(ingredient_id)
+  NJ --> W: candidate ingredient sets
+  W -> MG: fetchRecipes(candidateRecipeIds)
+  MG --> W: recipes
+end
+
+W -> PG: getUserConstraints(userId)
+PG --> W: constraints
+
+W -> W: rank recipes by\nexpiry urgency + fit + effort
+W -> NTF: sendSuggestion(userId, topK)
+NTF --> C: delivered
+C --> CRON: done
+
+@enduml

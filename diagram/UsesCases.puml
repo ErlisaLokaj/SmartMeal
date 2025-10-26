@@ -1,0 +1,310 @@
+@startuml ALL USE CASES
+' =====================================================================
+' SMARTMEAL - SEQUENCE DIAGRAMS (ALL USE CASES)
+' =====================================================================
+' Contains:
+' 1. Manage Profile & Preferences
+' 2. Manage Pantry
+' 3. Search Recipes
+' 4. View Recipe
+' 5. Generate Weekly Meal Plan
+' 6. Create Shopping List
+' 7. On-demand Recommendations
+' 8. Cook Recipe (Auto-Decrement)
+' 9. Waste Logging & Insights
+' 10. Save-me-first Suggestions
+' =====================================================================
+
+' ---------- (1) Manage Profile & Preferences ----------
+@startuml Manage Profile & Preferences
+title Manage Profile & Preferences
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "ProfileService" as PS
+database "PostgreSQL" as PG
+
+User -> FE: Open Profile / Edit Preferences
+FE -> C: PUT /profile {goals, prefs, allergies}
+C -> PS: upsertProfile(userId, data)
+
+PS -> PG: upsert app_user/dietary_profile
+PG --> PS: ok
+PS -> PG: upsert user_preference[*]
+PG --> PS: ok
+PS -> PG: upsert user_allergy[*]
+PG --> PS: ok
+
+PS --> C: profileSaved
+C --> FE: 200 OK + updated profile
+@enduml
+
+
+' ---------- (2) Manage Pantry ----------
+@startuml Manage Pantry
+title Manage Pantry (Add/Update + Expiry Estimation)
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "PantryService" as P
+database "PostgreSQL" as PG
+database "Neo4j" as NJ
+
+User -> FE: Add pantry item {ingredient, qty, unit}
+FE -> C: POST /pantry
+C -> P: addPantryItem(userId, ingredient, qty, unit)
+
+P -> NJ: getIngredientMeta(ingredient_id)
+NJ --> P: category, perishability, defaults
+P -> P: estimateExpiry(best_before)
+P -> PG: insert pantry_item {best_before}
+PG --> P: row
+
+P --> C: pantryItemCreated
+C --> FE: 201 Created + item
+@enduml
+
+
+' ---------- (3) Search Recipes ----------
+@startuml Search Recipes
+title Search Recipes
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "RecipeSearchService" as RS
+database "PostgreSQL" as PG
+database "MongoDB" as MG
+database "Neo4j" as NJ
+
+User -> FE: Search {query, filters}
+FE -> C: GET /recipes?...
+C -> RS: search(userId, query, filters)
+
+RS -> PG: getDietaryProfile(userId)
+PG --> RS: profile
+RS -> NJ: getDisallowedIngredients(profile/allergies)
+NJ --> RS: ingredient_ids
+RS -> MG: textSearch(query, filters, -ingredient_ids)
+MG --> RS: recipe hits
+
+RS --> C: results
+C --> FE: recipes list
+@enduml
+
+
+' ---------- (4) View Recipe ----------
+@startuml View Recipe
+title View Recipe
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+database "MongoDB" as MG
+
+User -> FE: Open recipe details
+FE -> C: GET /recipes/{id}
+C -> MG: findById(id)
+MG --> C: recipe doc (ingredients, steps, images)
+C --> FE: recipe details
+@enduml
+
+
+' ---------- (5) Generate Weekly Meal Plan ----------
+@startuml Generate Weekly Meal Plan
+title Generate Weekly Meal Plan (with substitutions)
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "PlannerService" as S
+database "PostgreSQL" as PG
+database "MongoDB" as MG
+database "Neo4j" as NJ
+
+User -> FE: Generate plan (week)
+FE -> C: POST /plans
+C -> S: generatePlan(userId, week)
+
+S -> PG: getProfile + pantry
+PG --> S: profile, pantry
+S -> MG: searchRecipes(profile)
+MG --> S: candidates
+
+loop ingredients per candidate
+  S -> NJ: checkConflicts(ingredient_ids)
+  NJ --> S: conflicts
+  alt conflicts
+    S -> NJ: suggestSubstitutions(conflicting_id)
+    NJ --> S: ranked substitutes
+    S -> S: apply substitution
+  end
+end
+
+S -> S: score by fit + pantry match
+S -> PG: insert meal_plan + meal_entries
+PG --> S: plan_id
+S --> C: plan_id
+C --> FE: Plan created
+@enduml
+
+
+' ---------- (6) Create Shopping List ----------
+@startuml Create Shopping List
+title Create Shopping List (Plan → Pantry diff)
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "ShoppingService" as SH
+database "PostgreSQL" as PG
+database "MongoDB" as MG
+
+User -> FE: Create shopping list for plan
+FE -> C: POST /shopping-lists {plan_id}
+C -> SH: buildList(plan_id, userId)
+
+SH -> PG: load meal_entries(plan_id)
+PG --> SH: entries (recipe_ids, servings)
+SH -> MG: aggregateIngredients(recipe_ids, servings)
+MG --> SH: consolidated ingredients
+SH -> PG: loadPantry(userId)
+PG --> SH: pantry
+
+SH -> SH: compute missing = needs - pantry
+SH -> PG: insert shopping_list + shopping_list_item[*]
+PG --> SH: list_id
+SH --> C: list_id
+C --> FE: List ready
+@enduml
+
+
+' ---------- (7) On-demand Recommendations ----------
+@startuml On-demand Recommendations
+title On-demand Recommendations
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "RecommendationService" as R
+database "PostgreSQL" as PG
+database "MongoDB" as MG
+database "Neo4j" as NJ
+
+User -> FE: Open Home / Recommendations
+FE -> C: GET /recommendations
+C -> R: recommend(userId)
+
+R -> PG: profile + pantry + recent cooking
+PG --> R: data
+R -> MG: candidateRecipes(by tags/cuisine/novelty)
+MG --> R: candidates
+R -> NJ: substitute/avoid checks (optional)
+NJ --> R: scores
+
+R -> R: rank (diversity, fit, novelty, pantry-usage)
+R --> C: topK recipes
+C --> FE: recommendations
+@enduml
+
+
+' ---------- (8) Cook Recipe (Auto-Decrement) ----------
+@startuml Cook Recipe
+title Cook Recipe → Auto-decrement Pantry
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "PantryService" as P
+database "PostgreSQL" as PG
+database "MongoDB" as MG
+
+User -> FE: Mark recipe cooked (servings)
+FE -> C: POST /cook {recipe_id, servings}
+C -> P: processCook(userId, recipe_id, servings)
+
+P -> MG: getRecipe(recipe_id)
+MG --> P: ingredients list
+
+P -> PG: beginTx()
+loop for each ingredient
+  P -> PG: SELECT ... FOR UPDATE\n(by user_id, ingredient_id, unit)
+  alt row exists
+    P -> PG: UPDATE pantry_item\nSET quantity = GREATEST(quantity - req, 0)
+  else no row
+    note right: no-op (no shortage persisted)
+  end
+end
+P -> PG: insert cooking_log
+P -> PG: commitTx()
+
+P --> C: ok
+C --> FE: Pantry updated
+@enduml
+
+
+' ---------- (9) Waste Logging & Insights ----------
+@startuml Waste Logging & Insights
+title Waste Logging & Insights Dashboard
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "WasteService" as W
+database "PostgreSQL" as PG
+
+== Log waste ==
+User -> FE: Log waste {ingredient, qty, reason}
+FE -> C: POST /waste
+C -> W: validateNormalize(ingredient, qty, unit)
+W --> C: ok
+C -> PG: insert waste_log
+PG --> C: ok
+C --> FE: saved
+
+== Insights ==
+User -> FE: Open Waste Insights
+FE -> C: GET /waste/insights?horizon=30d
+C -> W: buildInsights(userId, horizon)
+
+W -> PG: get waste_log aggregate
+PG --> W: totals by ingredient/category, trend
+W --> C: charts/metrics
+C --> FE: insights view
+@enduml
+
+
+' ---------- (10) Save-me-first Suggestions ----------
+@startuml Daily Save-me-first Suggestions
+title Daily Save-me-first Suggestions (Food-waste Minimizer)
+autonumber
+actor "Scheduler" as CRON
+participant "Controller" as C
+participant "WasteService" as W
+database "PostgreSQL" as PG
+database "MongoDB" as MG
+database "Neo4j" as NJ
+participant "Notifier" as NTF
+
+CRON -> C: triggerDailySaveMeFirst()
+C -> W: buildSaveMeFirst(userId)
+
+W -> PG: getExpiringPantry(userId, 3d)
+PG --> W: expiring items
+
+loop for each expiring ingredient
+  W -> NJ: findRecipesUsing(ingredient_id)
+  NJ --> W: candidate ingredient sets
+  W -> MG: fetchRecipes(candidateRecipeIds)
+  MG --> W: recipes
+end
+
+W -> PG: getUserConstraints(userId)
+PG --> W: constraints
+W -> W: rank by expiry urgency + fit + effort
+W -> NTF: sendSuggestion(userId, topK)
+NTF --> C: delivered
+C --> CRON: done
+@enduml

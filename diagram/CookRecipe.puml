@@ -1,0 +1,42 @@
+@startuml CookRecipe
+title Cook Recipe → Auto-decrement Pantry + Optional Waste Log
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "Pantry Service" as P
+database "PostgreSQL\n(pantry, cooking_log, waste_log)" as PG
+database "MongoDB\n(recipes)" as MG
+
+User -> FE: Mark recipe as cooked\n
+FE -> C: POST /cook {recipe_id, servings}
+C -> P: processCook(userId, recipe_id, servings)
+
+P -> MG: getRecipe(recipe_id)
+MG --> P: recipe + ingredient lines
+
+P -> PG: beginTx()
+
+loop For each ingredient
+  P -> PG: lockPantry(userId, ingredient_id, unit)\nSELECT ... FOR UPDATE
+  alt row exists
+    P -> PG: UPDATE pantry_item\nSET quantity = GREATEST(quantity - qty*servings, 0)
+  else no row
+    note right: no-op (no shortage persisted)
+  end
+end
+
+P -> PG: insert cooking_log
+P -> PG: commitTx()
+P --> C: ok
+C --> FE: Pantry updated
+
+== Optional waste ==
+User -> FE: Log waste(item, qty, reason)
+FE -> C: POST /waste
+C -> P: validateNormalize(item, qty, unit)
+P --> C: ok
+C -> PG: insert waste_log
+PG --> C: ok
+C --> FE: saved
+@enduml

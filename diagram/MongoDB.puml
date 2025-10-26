@@ -1,0 +1,57 @@
+@startuml MongoDB
+
+title MongoDB — Recipes (logical model)
+hide circle
+skinparam classAttributeIconSize 0
+
+class recipes <<Collection>> {
+  + _id : UUID  <<PK>>
+  --
+  title : string
+  slug : string <<UNIQUE>>
+  cuisine_id : UUID <<REF Neo4j::Cuisine.id>>
+  tags : [string]
+  yields.servings : number
+  yields.serving_unit : string
+  nutrition.per_serving.kcal : number
+  nutrition.per_serving.protein_g : number
+  nutrition.per_serving.carb_g : number
+  nutrition.per_serving.fat_g : number
+  created_at : ISODate
+  updated_at : ISODate
+  is_deleted : bool
+}
+
+class recipe_ingredient <<Embedded>> {
+  ingredient_id : UUID <<REF Neo4j::Ingredient.id>>
+  name : string (denorm)
+  quantity : number
+  unit : string
+  optional : bool
+  prep_note : string
+}
+
+class recipe_step <<Embedded>> {
+  order : int
+  text : string
+  duration_min : int
+}
+
+class image <<Embedded>> {
+  image_id : UUID
+  url : string
+  caption : string
+}
+
+recipes "1" o-- "1..*" recipe_ingredient : ingredients[]
+recipes "1" o-- "1..*" recipe_step : steps[]
+recipes "1" o-- "0..*" image : images[]
+
+note right of recipes
+Indexes:
+- text(title), tags
+- ingredients.ingredient_id
+- cuisine_id
+- slug (unique)
+end note
+@enduml

@@ -1,0 +1,137 @@
+@startuml PostgreSQL
+title PostgreSQL — SmartMeal (Users, Pantry, Plans, Shopping, Logs)
+hide circle
+skinparam classAttributeIconSize 0
+
+entity app_user {
+  * user_id : UUID <<PK>>
+  --
+  email : citext <<UNIQUE>>
+  full_name : text
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+
+entity dietary_profile {
+  * user_id : UUID <<PK, FK app_user.user_id>>
+  --
+  goal : goal_type
+  activity : activity_level
+  kcal_target : int
+  protein_target_g : numeric
+  carb_target_g : numeric
+  fat_target_g : numeric
+  cuisine_likes : text[]
+  cuisine_dislikes : text[]
+  updated_at : timestamptz
+}
+
+entity user_allergy {
+  * user_id : UUID <<FK app_user.user_id>>
+  * ingredient_id : UUID  <<REF Neo4j::Ingredient.id>>
+  --
+  note : text
+}
+
+entity user_preference {
+  * user_id : UUID <<FK app_user.user_id>>
+  * tag : text
+  --
+  strength : pref_strength
+}
+
+entity pantry_item {
+  * pantry_item_id : UUID <<PK>>
+  --
+  user_id : UUID <<FK app_user.user_id>>
+  ingredient_id : UUID <<REF Neo4j::Ingredient.id>>
+  quantity : numeric
+  unit : text
+  best_before : date
+  source : text
+  created_at : timestamptz
+  updated_at : timestamptz
+}
+note bottom of pantry_item
+UNIQUE (user_id, ingredient_id, unit)
+CHECK (quantity >= 0)
+end note
+
+entity meal_plan {
+  * plan_id : UUID <<PK>>
+  --
+  user_id : UUID <<FK app_user.user_id>>
+  starts_on : date
+  ends_on : date
+  title : text
+  created_at : timestamptz
+}
+
+entity meal_entry {
+  * meal_entry_id : UUID <<PK>>
+  --
+  plan_id : UUID <<FK meal_plan.plan_id>>
+  day : date
+  slot : meal_slot
+  recipe_id : UUID <<REF MongoDB::recipes._id>>
+  servings : numeric
+  notes : text
+}
+
+entity shopping_list {
+  * list_id : UUID <<PK>>
+  --
+  user_id : UUID <<FK app_user.user_id>>
+  plan_id : UUID <<FK meal_plan.plan_id, NULLABLE>>
+  created_at : timestamptz
+  status : text
+}
+
+entity shopping_list_item {
+  * list_item_id : UUID <<PK>>
+  --
+  list_id : UUID <<FK shopping_list.list_id>>
+  ingredient_id : UUID <<REF Neo4j::Ingredient.id>>
+  needed_qty : numeric
+  unit : text
+  checked : boolean
+  from_recipe_id : UUID <<REF MongoDB::recipes._id, NULLABLE>>
+  note : text
+}
+
+entity cooking_log {
+  * cook_id : UUID <<PK>>
+  --
+  user_id : UUID <<FK app_user.user_id>>
+  recipe_id : UUID <<REF MongoDB::recipes._id>>
+  cooked_at : timestamptz
+  servings : numeric
+}
+
+entity waste_log {
+  * waste_id : UUID <<PK>>
+  --
+  user_id : UUID <<FK app_user.user_id>>
+  ingredient_id : UUID <<REF Neo4j::Ingredient.id>>
+  quantity : numeric
+  unit : text
+  reason : text
+  occurred_at : timestamptz not null default now()
+}
+
+' Multiplicities shown in quotes:
+app_user "1" ||--o{ "0..1" dietary_profile
+app_user "1" ||--o{ "0..*" user_allergy
+app_user "1" ||--o{ "0..*" user_preference
+app_user "1" ||--o{ "0..*" pantry_item
+app_user "1" ||--o{ "0..*" meal_plan
+meal_plan "1" ||--o{ "0..*" meal_entry
+app_user "1" ||--o{ "0..*" shopping_list
+shopping_list "1" ||--o{ "1..*" shopping_list_item
+app_user "1" ||--o{ "0..*" cooking_log
+app_user "1" ||--o{ "0..*" waste_log
+
+' Optional link: a plan may have many lists; a list may belong to 0..1 plan
+meal_plan "1" ||..o{ "0..*" shopping_list : optional
+
+@enduml

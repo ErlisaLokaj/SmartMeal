@@ -1,0 +1,37 @@
+@startuml Neo4j
+title Neo4j — Ingredient Graph Schema
+hide circle
+skinparam classAttributeIconSize 0
+
+class Ingredient <<Node>> {
+  + id : UUID <<PK>>
+  name : string
+  aliases : [string]
+  category : string
+  is_allergen : boolean
+}
+
+class Cuisine <<Node>> {
+  + id : UUID <<PK>>
+  name : string
+}
+
+class DietTag <<Node>> {
+  + id : UUID <<PK>>
+  name : string
+}
+
+class Flavor <<Node>> {
+  + id : UUID <<PK>>
+  name : string
+}
+
+
+
+Ingredient " " -right-> " " Ingredient : PAIRS_WITH {score} / SUBSTITUTES {score, reason} / CONTAINS
+ 
+Ingredient --> DietTag : HAS_TAG
+Ingredient --> Flavor : HAS_FLAVOR
+Ingredient --> Cuisine : BELONGS_TO
+
+@enduml

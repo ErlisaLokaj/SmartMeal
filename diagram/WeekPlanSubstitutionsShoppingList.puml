@@ -1,0 +1,64 @@
+@startuml
+title Weekly Plan + Substitutions + Shopping List
+
+autonumber
+actor User
+participant "Frontend" as FE
+participant "Controller" as C
+participant "Planner Service\n(Orchestrator)" as S
+database "PostgreSQL\n(users, prefs, pantry, plans)" as PG
+database "MongoDB\n(recipes)" as MG
+database "Neo4j\n(ingredients graph)" as NJ
+
+User -> FE: Set goals & constraints\nSelect week range
+FE -> C: Generate weekly plan(request)
+C -> S: generatePlan(userId, week)
+
+S -> PG: getDietaryProfile(userId)
+PG --> S: profile
+
+loop Candidate recipe search
+  S -> MG: searchRecipes(profile, tags)
+  MG --> S: recipe candidates
+end
+
+loop For each candidate recipe ingredient
+  S -> NJ: getConflicts/allergens(ingredientIds)
+  NJ --> S: conflicts
+  alt Conflicts found
+    S -> NJ: suggestSubstitutions(ingredientId)
+    NJ --> S: ranked substitutes
+    S -> MG: patchRecipeWithSubstitution(recipeId, altIngredient)
+    MG --> S: patched recipe
+  end
+end
+
+S -> PG: getPantry(userId)
+PG --> S: pantry
+
+S -> S: score & rank by\nprofile fit + pantry match
+S --> C: final plan (recipes per day/slot)
+
+C -> PG: save meal_plan + meal_entries
+PG --> C: plan_id
+
+== Shopping list ==
+User -> FE: Create shopping list
+FE -> C: Build list for plan_id
+C -> S: buildShoppingList(plan_id)
+
+S -> PG: load meal_entries(plan_id)
+PG --> S: entries
+S -> MG: aggregateRecipeIngredients(recipe_ids)
+MG --> S: consolidated ingredients
+
+S -> PG: loadPantry(userId)
+PG --> S: pantry
+
+S -> S: compute missing quantities
+S -> PG: create shopping_list + items
+PG --> S: list_id
+S --> C: list_id
+C --> FE: list ready
+
+@enduml

@@ -1,0 +1,105 @@
+@startuml PostgreSQL + MongoDB + Neo4j
+title Integrated Data Model — PostgreSQL + MongoDB + Neo4j
+hide circle
+skinparam classAttributeIconSize 0
+
+package "PostgreSQL" {
+  class app_user {
+  * user_id : UUID <<PK>>
+  --
+  email : citext <<UNIQUE>>
+  full_name : text
+  created_at : timestamptz
+  updated_at : timestamptz
+  }
+
+  class meal_entry {
+    * meal_entry_id : UUID <<PK>>
+    --
+    plan_id : UUID <<FK meal_plan.plan_id>>
+    day : date
+    slot : meal_slot
+    recipe_id : UUID <<REF MongoDB::recipes._id>>
+    servings : numeric
+    notes : text
+  }
+
+  class pantry_item {
+  * pantry_item_id : UUID <<PK>>
+  --
+  user_id : UUID <<FK app_user.user_id>>
+  ingredient_id : UUID <<REF Neo4j::Ingredient.id>>
+  quantity : numeric
+  unit : text
+  best_before : date
+  source : text
+  created_at : timestamptz
+  updated_at : timestamptz
+  }
+  note bottom of pantry_item
+  UNIQUE (user_id, ingredient_id, unit)
+  CHECK (quantity >= 0)
+  end note
+
+  class shopping_list_item {
+  * list_item_id : UUID <<PK>>
+  --
+  list_id : UUID <<FK shopping_list.list_id>>
+  ingredient_id : UUID <<REF Neo4j::Ingredient.id>>
+  needed_qty : numeric
+  unit : text
+  checked : boolean
+  from_recipe_id : UUID <<REF MongoDB::recipes._id, NULLABLE>>
+  note : text
+  }
+
+  class waste_log {
+  * waste_id : UUID <<PK>>
+  --
+  user_id : UUID <<FK app_user.user_id>>
+  ingredient_id : UUID <<REF Neo4j::Ingredient.id>>
+  quantity : numeric
+  unit : text
+  reason : text
+  occurred_at : timestamptz not null default now()
+  }
+}
+
+package "MongoDB" {
+  class recipes {
+    _id : UUID <<PK>>
+    title : string
+  }
+
+  class recipe_ingredient {
+    ingredient_id : UUID <<REF Neo4j.Ingredient.id>>
+    quantity : number
+    unit : string
+  }
+
+  recipes "1" o-- "1..*" recipe_ingredient
+}
+
+package "Neo4j" {
+  class Ingredient {
+    id : UUID <<PK>>
+    name : string
+  }
+
+  class Cuisine {
+    id : UUID <<PK>>
+    name : string
+  }
+
+  Ingredient --> Cuisine : BELONGS_TO
+}
+
+' Cross-DB soft links
+meal_entry --> recipes : recipe_id = _id
+shopping_list_item --> recipes : from_recipe_id = _id
+pantry_item --> Ingredient : ingredient_id = id
+shopping_list_item --> Ingredient : ingredient_id = id
+waste_log --> Ingredient : ingredient_id = id
+recipe_ingredient --> Ingredient : ingredient_id = id
+
+@enduml
