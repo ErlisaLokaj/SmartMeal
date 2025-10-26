@@ -35,15 +35,16 @@ services:
       NEO4J_server_directories_import: /var/lib/neo4j/import
       NEO4J_dbms_security_allow__csv__import__from__file__urls: "true"
     ports:
-      - "7474:7474"  # Browser
-      - "7687:7687"  # Bolt
+      - "7474:7474"
+      - "7687:7687"
     volumes:
       - neo4j_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "echo 'RETURN 1' | cypher-shell -u neo4j -p smartmeal-neo4j || exit 1"]
+      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1" ]
       interval: 10s
       timeout: 10s
       retries: 30
+      start_period: 40s
 
   app:
     build: .
