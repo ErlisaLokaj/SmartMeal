@@ -1,3 +1,9 @@
+CREATE USER smartmeal WITH PASSWORD 'smartmeal';
+CREATE DATABASE smartmeal OWNER smartmeal;
+GRANT ALL PRIVILEGES ON DATABASE smartmeal TO smartmeal;
+
+\c smartmeal;
+
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   name VARCHAR(50) UNIQUE NOT NULL,
