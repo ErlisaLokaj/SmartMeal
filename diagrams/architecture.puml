@@ -1,0 +1,23 @@
+@startuml
+title SmartMeal - High-Level Architecture Overview
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+actor User as user
+
+rectangle "SmartMeal API\n(FastAPI)" as API #LightBlue {
+  rectangle "User Service" as US
+  rectangle "Recipe Service" as RS
+  rectangle "Planner Service" as PS
+}
+
+database "PostgreSQL\nUsers & Pantry" as PG #LightGreen
+database "MongoDB\nRecipes" as MG #Wheat
+database "Neo4j\nIngredient Graph" as NEO #Salmon
+
+user --> API : HTTP / JSON
+API --> PG : SQL (structured)
+API --> MG : Document queries
+API --> NEO : Graph queries (substitutions)
+
+@enduml

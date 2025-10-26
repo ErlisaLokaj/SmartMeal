@@ -1,0 +1,19 @@
+@startuml
+title SmartMeal - Data Flow Between Services
+
+rectangle "User Service" as US
+rectangle "Recipe Service" as RS
+rectangle "Planner Service" as PS
+
+database "PostgreSQL" as PG
+database "MongoDB" as MG
+database "Neo4j" as NEO
+
+US --> PG : Create/Update User\nManage Pantry
+RS --> MG : Search Recipes\nBased on Ingredient or Name
+PS --> PG : Get User Goal & Pantry
+PS --> MG : Get Matching Recipes
+PS --> NEO : Get Substitutes\nFor Ingredient
+PS --> PG : Write Shopping List
+
+@enduml

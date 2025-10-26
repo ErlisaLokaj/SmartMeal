@@ -1,0 +1,30 @@
+@startuml
+title SmartMeal - Docker Deployment Architecture
+
+node "Docker Host" {
+
+  frame "Network: smartmeal_default" {
+
+    component "FastAPI App\n(app)" as app
+    database "Postgres\n(postgres)" as db_pg
+    database "MongoDB\n(mongo)" as db_mg
+    database "Neo4j\n(neo4j)" as db_neo
+
+    app -- db_pg : 5432/tcp
+    app -- db_mg : 27017/tcp
+    app -- db_neo : 7687/tcp\n(Bolt)
+
+  }
+
+  folder "Volumes" {
+    [pg_data]
+    [mongo_data]
+    [neo4j_data]
+  }
+
+  db_pg --> pg_data
+  db_mg --> mongo_data
+  db_neo --> neo4j_data
+}
+
+@enduml

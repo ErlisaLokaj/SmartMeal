@@ -1,0 +1,21 @@
+@startuml
+title SmartMeal - System Architecture
+
+actor User as user
+
+rectangle "SmartMeal API\n(FastAPI)" as api {
+  [Planner Service]
+  [User Service]
+  [Recipe Service]
+}
+
+database "PostgreSQL\n(Users, Pantry)" as pg
+database "MongoDB\n(Recipes)" as mongo
+database "Neo4j\nIngredient Graph" as neo
+
+user --> api : API Requests\n(HTTP/JSON)
+api --> pg : SQL Queries
+api --> mongo : Recipe Search\n(Unstructured Data)
+api --> neo : Graph Queries\n(Substitutions)
+
+@enduml
