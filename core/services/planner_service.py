@@ -3,6 +3,9 @@ from adapters.sql_adapter import get_user, get_pantry
 from adapters.mongo_adapter import search_recipes_by_ingredient
 from adapters.graph_adapter import get_substitutes
 from core.utils.helpers import rank_recipes, build_shopping_list
+import logging
+log = logging.getLogger("smartmeal.planner")
+
 
 def generate_plan_for_ingredient(user_name: str, ingredient: str, top_n: int = 10):
     user = get_user(user_name) or {"name": user_name, "goal": "Balanced"}
@@ -11,6 +14,11 @@ def generate_plan_for_ingredient(user_name: str, ingredient: str, top_n: int = 1
     subs = get_substitutes(ingredient)
     pantry = get_pantry(user_name)
     shopping = build_shopping_list(ranked, pantry=pantry)
+    log.info(
+        "plan_generated user=%s goal=%s ingredient=%s recipes=%d substitutes=%d pantry_items=%d need=%d have=%d",
+        user["name"], user["goal"], ingredient, len(ranked), len(subs), len(pantry),
+        len(shopping.get("need", [])), len(shopping.get("have", []))
+    )
     return {
         "user": user["name"],
         "goal": user["goal"],

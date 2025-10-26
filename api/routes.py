@@ -1,5 +1,13 @@
 """API routes"""
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+from adapters.sql_adapter import init_postgres
 from fastapi import FastAPI, Query, Body
+
 
 from adapters.graph_adapter import get_substitutes
 from core.services.user_service import (
@@ -15,6 +23,7 @@ app = FastAPI(title="SmartMeal API", version="1.0.0",
 
 @app.on_event("startup")
 def bootstrap():
+    init_postgres()
     ensure_bootstrap_user()
 
 @app.get("/health")
