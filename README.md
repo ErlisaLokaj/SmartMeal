@@ -5,6 +5,7 @@ The system generates personalized meal plans based on:
  - User dietary goals
  - Ingredients already available in the pantry
  - Alternative ingredient recommendations  
+ - Meal plans for user based on dietary goals and pantry
 
 ---
 
@@ -36,7 +37,7 @@ docker exec smartmeal-mongo-1 mongoimport \
 ```
 
 ### Neo4j — Ingredient Substitutions
-Start a lightweight local file server:
+Start a local file server:
 ```bash
 cd ./data && python3 -m http.server 8080
 ```
