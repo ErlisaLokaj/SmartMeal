@@ -160,7 +160,7 @@ def to_jsonable(obj: Any) -> Any:
     return str(obj)
 
 
-# Pagination (simple)
+# Pagination
 
 def paginate(items: List[Any], page: int = 1, size: int = 10) -> Tuple[List[Any], Dict[str, int]]:
     """Return a slice of items with pagination metadata."""
