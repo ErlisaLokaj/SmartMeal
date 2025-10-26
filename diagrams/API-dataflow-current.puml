@@ -1,0 +1,54 @@
+@startuml API_Data_Flow_Current
+title SmartMeal - API Data Flow (Current Implementation)
+left to right direction
+
+actor User
+
+rectangle "FastAPI Routes" {
+  [User Management]
+  [Recipe Search]
+  [Meal Planning]
+}
+
+database "PostgreSQL" {
+  [users]
+  [pantry]
+  [meal_plan]
+  [meal_plan_recipes]
+}
+
+database "MongoDB" {
+  [recipes\n(300 docs)]
+}
+
+database "Neo4j" {
+  [Ingredient Graph\n(2,254 nodes)]
+}
+
+User --> [User Management] : POST /users\nPUT /users/{name}/pantry
+User --> [Recipe Search] : GET /recipes/{ingredient}
+User --> [Meal Planning] : GET /plan/{user}/{ingredient}
+
+[User Management] --> [users] : CRUD operations
+[User Management] --> [pantry] : Set/Get items
+
+[Recipe Search] --> [recipes\n(300 docs)] : Text search on\ningredients & name
+
+[Meal Planning] --> [users] : Get user goal
+[Meal Planning] --> [pantry] : Get pantry items
+[Meal Planning] --> [recipes\n(300 docs)] : Search by ingredient
+[Meal Planning] --> [Ingredient Graph\n(2,254 nodes)] : Get substitutes
+[Meal Planning] --> [meal_plan] : Create plan
+[Meal Planning] --> [meal_plan_recipes] : Save recipe list
+
+note right of [Meal Planning]
+**Planner Service Logic:**
+1. Get user profile + pantry (PostgreSQL)
+2. Search recipes by ingredient (MongoDB)
+3. Rank by user goal (in-memory)
+4. Get substitutes (Neo4j)
+5. Build shopping list (pantry diff)
+6. Save plan (PostgreSQL)
+end note
+
+@enduml

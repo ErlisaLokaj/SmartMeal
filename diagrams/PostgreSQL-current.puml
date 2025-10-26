@@ -1,0 +1,64 @@
+@startuml PostgreSQL_Current
+title PostgreSQL Schema - SmartMeal (Current Implementation)
+hide circle
+skinparam classAttributeIconSize 0
+
+entity users {
+  * id : SERIAL <<PK>>
+  --
+  name : VARCHAR(50) <<UNIQUE, NOT NULL>>
+  goal : VARCHAR(100)
+}
+
+entity pantry {
+  * id : SERIAL <<PK>>
+  --
+  user_id : INTEGER <<FK users.id>>
+  item : TEXT <<NOT NULL>>
+}
+
+entity meal_plan {
+  * id : SERIAL <<PK>>
+  --
+  user_id : INTEGER <<FK users.id>>
+  title : TEXT <<NOT NULL>>
+  ingredient : TEXT
+  created_at : TIMESTAMP <<DEFAULT NOW()>>
+}
+
+entity meal_plan_recipes {
+  * id : SERIAL <<PK>>
+  --
+  meal_plan_id : INTEGER <<FK meal_plan.id>>
+  recipe_name : TEXT <<NOT NULL>>
+  recipe_source : TEXT
+  position : INTEGER <<DEFAULT 0>>
+}
+
+users "1" ||--o{ "0..*" pantry
+users "1" ||--o{ "0..*" meal_plan
+meal_plan "1" ||--o{ "0..*" meal_plan_recipes
+
+note bottom of pantry
+ON DELETE CASCADE
+Stores user's available ingredients
+as free-text items
+end note
+
+note bottom of meal_plan
+Stores generated meal plans
+with target ingredient
+end note
+
+note bottom of meal_plan_recipes
+ON DELETE CASCADE
+Stores recipes in each meal plan
+with ordering (position)
+end note
+
+note top of users
+Core user table
+Stores dietary goal
+end note
+
+@enduml

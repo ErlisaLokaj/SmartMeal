@@ -1,0 +1,59 @@
+@startuml Service_Layer_Current
+title SmartMeal - Service Layer Architecture (Current)
+
+package "API Layer" {
+  [routes.py\nFastAPI Endpoints]
+}
+
+package "Service Layer" {
+  [user_service.py]
+  [recipe_service.py]
+  [planner_service.py]
+}
+
+package "Adapter Layer" {
+  [sql_adapter.py\nPostgreSQL]
+  [mongo_adapter.py\nMongoDB]
+  [graph_adapter.py\nNeo4j]
+}
+
+package "Core" {
+  [helpers.py\nUtilities]
+  [models/\nDomain Models]
+}
+
+[routes.py\nFastAPI Endpoints] --> [user_service.py]
+[routes.py\nFastAPI Endpoints] --> [recipe_service.py]
+[routes.py\nFastAPI Endpoints] --> [planner_service.py]
+
+[user_service.py] --> [sql_adapter.py\nPostgreSQL]
+[recipe_service.py] --> [mongo_adapter.py\nMongoDB]
+[planner_service.py] --> [sql_adapter.py\nPostgreSQL]
+[planner_service.py] --> [mongo_adapter.py\nMongoDB]
+[planner_service.py] --> [graph_adapter.py\nNeo4j]
+
+[user_service.py] --> [helpers.py\nUtilities]
+[recipe_service.py] --> [helpers.py\nUtilities]
+[planner_service.py] --> [helpers.py\nUtilities]
+
+note top of [routes.py\nFastAPI Endpoints]
+**Endpoints:**
+- GET/POST /users
+- GET/PUT /users/{name}/pantry
+- GET /recipes/search
+- GET /recipes/{ingredient}
+- GET /substitute/{ingredient}
+- GET /plan/{user}/{ingredient}
+- POST /plan/{user}/{ingredient}
+end note
+
+note bottom of [helpers.py\nUtilities]
+**Utilities:**
+- normalize_ingredient()
+- rank_recipes()
+- build_shopping_list()
+- paginate()
+- score_recipe_against_goal()
+end note
+
+@enduml

@@ -1,0 +1,46 @@
+@startuml Neo4j_Current
+title Neo4j Graph Schema - SmartMeal (Current Implementation)
+hide circle
+skinparam classAttributeIconSize 0
+
+class Ingredient <<Node>> {
+  + name : string <<PK>>
+  --
+  category : string (optional)
+}
+
+class "(Ingredient)" as Ing1
+class "(Ingredient)" as Ing2
+
+Ing1 -right-> Ing2 : SUBSTITUTE_FOR\n{reason: string}
+
+note top of Ingredient
+**Node Label: Ingredient**
+Total Nodes: 2,254 ingredients
+Total Relationships: 6,901 substitutions
+
+**Properties:**
+- name: lowercase ingredient name (unique)
+- category: optional categorization
+
+**Example Nodes:**
+(:Ingredient {name: "chicken"})
+(:Ingredient {name: "tofu"})
+(:Ingredient {name: "butter"})
+end note
+
+note bottom of Ing1
+**Relationship: SUBSTITUTE_FOR**
+Direction: (A)-[:SUBSTITUTE_FOR]->(B)
+Meaning: A can be replaced by B
+
+**Properties:**
+- reason: why this substitution works
+  (e.g., "vegetarian", "vegan", "similar_meat")
+
+**Example:**
+(chicken)-[:SUBSTITUTE_FOR {reason: "vegetarian"}]->(tofu)
+(butter)-[:SUBSTITUTE_FOR {reason: "vegan"}]->(olive oil)
+end note
+
+@enduml

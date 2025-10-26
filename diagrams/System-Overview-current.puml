@@ -1,0 +1,84 @@
+@startuml System_Overview_Current
+title SmartMeal - Current System Data Model (Cross-Database)
+hide circle
+skinparam classAttributeIconSize 0
+
+package "PostgreSQL" {
+  entity users_pg {
+    * id : SERIAL
+    name : VARCHAR
+    goal : VARCHAR
+  }
+
+  entity pantry_pg {
+    * id : SERIAL
+    user_id : INTEGER
+    item : TEXT
+  }
+
+  entity meal_plan_pg {
+    * id : SERIAL
+    user_id : INTEGER
+    title : TEXT
+    ingredient : TEXT
+  }
+
+  entity meal_plan_recipes_pg {
+    * id : SERIAL
+    meal_plan_id : INTEGER
+    recipe_name : TEXT
+    recipe_source : TEXT
+  }
+}
+
+package "MongoDB" {
+  class recipes_mg {
+    _id : ObjectId
+    name : string
+    ingredients : [string]
+    steps : [string]
+    source : string
+  }
+}
+
+package "Neo4j" {
+  class Ingredient_neo {
+    name : string
+  }
+
+  Ingredient_neo -right-> Ingredient_neo : SUBSTITUTE_FOR
+}
+
+users_pg "1" ||--o{ "0..*" pantry_pg
+users_pg "1" ||--o{ "0..*" meal_plan_pg
+meal_plan_pg "1" ||--o{ "0..*" meal_plan_recipes_pg
+
+note top of users_pg
+**User Management**
+- Basic profile (name, goal)
+- Pantry as text items
+- Meal plans with recipes
+end note
+
+note top of recipes_mg
+**Recipe Collection**
+- 300 recipes from Kaggle
+- Text-searchable
+- Categorized
+end note
+
+note top of Ingredient_neo
+**Ingredient Graph**
+- 2,254 ingredients
+- 6,901 substitution links
+- Reason-based relationships
+end note
+
+note bottom of meal_plan_recipes_pg
+**Soft Reference:**
+recipe_name + recipe_source
+point to MongoDB recipes
+(no enforced FK)
+end note
+
+@enduml

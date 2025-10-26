@@ -1,0 +1,37 @@
+@startuml MongoDB_Current
+title MongoDB Schema - SmartMeal (Current Implementation)
+hide circle
+skinparam classAttributeIconSize 0
+
+class recipes <<Collection>> {
+  + _id : ObjectId <<PK>>
+  --
+  name : string <<NOT NULL>>
+  ingredients : [string] <<NOT NULL>>
+  steps : [string] <<NOT NULL>>
+  source : string
+  category : string <<DEFAULT "General">>
+  area : string <<DEFAULT "International">>
+}
+
+note right of recipes
+**Collection: recipes**
+Total: 300 recipes imported from Kaggle
+
+**Indexes:**
+- Text index on (name, ingredients)
+- Index on category
+- Index on area
+
+**Sample:**
+{
+  "name": "Grilled Chicken Breast",
+  "ingredients": ["2 chicken breasts", "1 tbsp olive oil", ...],
+  "steps": ["Preheat grill...", "Season chicken...", ...],
+  "source": "https://www.food.com/...",
+  "category": "General",
+  "area": "International"
+}
+end note
+
+@enduml
