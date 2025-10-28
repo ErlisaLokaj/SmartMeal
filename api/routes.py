@@ -104,24 +104,6 @@ def recipes_by_name_simple(
         "total": len(res["data"]),
     })
     return res
-@app.post("/recipes/link")
-def link_recipe_to_graph(
-    recipe: str = Body(...),
-    ingredients: list[str] = Body(...)
-):
-    """Link recipe to ingredients in Neo4j graph."""
-    from adapters.graph_adapter import link_recipe
-    success = link_recipe(recipe, ingredients)
-    if success:
-        return {"message": f"Linked '{recipe}' to {len(ingredients)} ingredients"}
-    return {"error": "Failed to link recipe"}
-
-@app.get("/recipes/{recipe_name}/similar")
-def get_similar_recipes(recipe_name: str, min_shared: int = Query(2, ge=1)):
-    """Find similar recipes based on shared ingredients."""
-    from adapters.graph_adapter import find_similar_recipes
-    similar = find_similar_recipes(recipe_name, min_shared)
-    return {"recipe": recipe_name, "similar": similar}
 
 
 # ---------- Substitutions ----------
@@ -156,4 +138,3 @@ def plan_simple(
     - Builds shopping_list {need, have} vs pantry
     """
     return generate_plan_for_ingredient(user, ingredient, top_n=top)
-
