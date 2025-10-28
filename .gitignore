@@ -3,10 +3,10 @@ __pycache__/
 *.pyo
 *.pyd
 env/
-venv/
 *.txt
 .idea/
 .vscode/
 .DS_Store
 *.sh
 .env
+.venv/

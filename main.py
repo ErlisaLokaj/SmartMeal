@@ -1,17 +1,33 @@
-from core.services.user_service import get_user_info
-from core.services.recipe_service import find_recipes
-from core.services.planner_service import generate_plan
+from fastapi import FastAPI
+import logging
 
-def main():
-    print("=== SMARTMEAL DEMO ===")
-    user = get_user_info("Anna")
-    recipes = find_recipes("chicken")
-    plan = generate_plan(user, recipes)
+from core.database.models import init_database
 
-    print("\nUser:", user)
-    print("\nRecipes found:", recipes["recipes"])
-    print("Substitutes:", recipes["alternatives"])
-    print("\nGenerated Weekly Plan:", plan)
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+)
+
+# Initialize database
+init_database()
+
+# Create FastAPI app
+app = FastAPI(
+    title="SmartMeal - Profile Management",
+    version="1.0.0",
+    description="Manage user profiles, dietary preferences, allergies"
+)
+
+# Include routers
+app.include_router(router)
+
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "profile-management"}
+
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
