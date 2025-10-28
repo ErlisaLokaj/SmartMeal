@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 import logging
-
+import uvicorn
+from api.profile_routes import router
 from core.database.models import init_database
 
 # Setup logging
@@ -29,5 +30,4 @@ def health_check():
 
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
