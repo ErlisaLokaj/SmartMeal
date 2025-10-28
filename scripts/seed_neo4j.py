@@ -59,11 +59,8 @@ def chunked(iterator: Iterator, size: int) -> Iterator[List]:
 
 
 def ensure_constraints(session):
-    # Create constraints that make MERGE idempotent (Neo4j 4+ syntax)
     logger.info("Ensuring constraints")
-    session.run(
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.proc_id) IS UNIQUE"
-    )
+    # Only name is truly unique
     session.run(
         "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.name) IS UNIQUE"
     )
@@ -74,16 +71,29 @@ def write_batch(tx, batch: List[Dict]):
     # We build a parameterized UNWIND payload to MERGE nodes and relationships.
     pairs = []
     for item in batch:
-        base = {"name": item.get("name"), "proc_id": item.get("proc_id")}
-        for sub in item.get("substitutes", []) or []:
-            pairs.append(
-                {
-                    "base_name": base["name"],
-                    "base_proc": base.get("proc_id"),
-                    "sub_name": sub.get("name"),
-                    "sub_proc": sub.get("proc_id"),
-                }
-            )
+        base_name = item.get("name")
+        base_proc = item.get("proc_id")
+        subs = item.get("substitutes", []) or []
+
+        # DEBUG: Log first item in first batch
+        if len(pairs) == 0:
+            logger.info(f"First item: name={base_name}, proc_id={base_proc}, substitutes_count={len(subs)}")
+
+        for sub in subs:
+            sub_name = sub.get("name")
+            sub_proc = sub.get("proc_id")
+
+            if not base_name or not sub_name:
+                continue  # Skip if missing required fields
+
+            pairs.append({
+                "base_name": base_name,
+                "base_proc": base_proc,
+                "sub_name": sub_name,
+                "sub_proc": sub_proc,
+            })
+
+    logger.info(f"Batch has {len(pairs)} relationship pairs")
 
     if not pairs:
         return
@@ -92,9 +102,9 @@ def write_batch(tx, batch: List[Dict]):
     query = """
     UNWIND $pairs AS p
     MERGE (b:Ingredient {name: p.base_name})
-    SET b.proc_id = coalesce(b.proc_id, p.base_proc)
+    SET b.proc_id = p.base_proc
     MERGE (s:Ingredient {name: p.sub_name})
-    SET s.proc_id = coalesce(s.proc_id, p.sub_proc)
+    SET s.proc_id = p.sub_proc
     MERGE (b)-[r:SUBSTITUTED_BY]->(s)
     RETURN count(r) as created
     """

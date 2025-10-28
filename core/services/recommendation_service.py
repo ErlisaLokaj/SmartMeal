@@ -4,7 +4,8 @@ import logging
 from typing import List, Set
 from uuid import UUID
 from sqlalchemy.orm import Session
-
+import json
+from datetime import timedelta, datetime
 from core.database.models import AppUser, PantryItem
 from adapters import mongo_adapter
 
@@ -52,11 +53,25 @@ class RecommendationService:
             logger.warning(f"User {user_id} not found")
             return []
 
+        recent_threshold = datetime.utcnow() - timedelta(days=7)  # Last 7 days
+
+        recently_cooked_recipe_ids = set()
+        try:
+            from core.database.models import CookingLog
+            recent_logs = db.query(CookingLog).filter(
+                CookingLog.user_id == user_id,
+                CookingLog.cooked_at >= recent_threshold
+            ).all()
+            recently_cooked_recipe_ids = {str(log.recipe_id) for log in recent_logs}
+            logger.info(f"User recently cooked {len(recently_cooked_recipe_ids)} recipes")
+        except Exception as e:
+            logger.debug(f"Could not load recent cooking history: {e}")
+
+
         # 2. Extract user preferences
         cuisine_likes = []
         cuisine_dislikes = []
         if user.dietary_profile:
-            import json
             cuisine_likes = json.loads(user.dietary_profile.cuisine_likes or "[]")
             cuisine_dislikes = json.loads(user.dietary_profile.cuisine_dislikes or "[]")
 
@@ -97,9 +112,32 @@ class RecommendationService:
 
         logger.info(f"Found {len(candidate_recipes)} candidate recipes")
 
-        # 6. Score and rank recipes
+        # Filter out recently cooked recipes for novelty
+        candidate_recipes = [
+            r for r in candidate_recipes
+            if r.get("_id") not in recently_cooked_recipe_ids
+        ]
+        logger.info(f"After filtering recent cooking: {len(candidate_recipes)} candidates remain")
+
+
+        # 6. Score and rank recipes (with Neo4j substitute checks)
         scored_recipes = []
         for recipe in candidate_recipes:
+            # Check Neo4j for ingredient substitutes
+            substitute_score = 0
+            try:
+                from adapters import graph_adapter
+                for ingredient in recipe.get("ingredients", []):
+                    ing_name = ingredient.get("name")
+                    if ing_name:
+                        substitutes = graph_adapter.suggest_substitutes(ing_name, limit=3)
+                        # If ingredient has substitutes, slight bonus for flexibility
+                        if substitutes:
+                            substitute_score += 5
+            except Exception as e:
+                logger.debug(f"Neo4j substitute check failed: {e}")
+
+            # Calculate base score
             score = RecommendationService._score_recipe(
                 recipe=recipe,
                 cuisine_likes=cuisine_likes,
@@ -108,6 +146,9 @@ class RecommendationService:
                 avoid_tags=avoid_tags,
                 pantry_ingredient_ids=pantry_ingredient_ids
             )
+
+            # Add Neo4j substitute bonus
+            score += substitute_score
 
             # Calculate pantry matches
             recipe_ingredient_ids = {

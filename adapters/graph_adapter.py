@@ -109,8 +109,12 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
     }
 
 
-def suggest_substitutes(ingredient_id: str, limit: int = 5):
-    """Return a short list of substitute ingredient ids/names for a given ingredient.
+def suggest_substitutes(ingredient_name: str, limit: int = 5):
+    """Return a short list of substitute ingredient names for a given ingredient.
+
+    Args:
+        ingredient_name: Name of the ingredient (e.g., "chicken", "milk")
+        limit: Maximum number of substitutes to return
 
     If Neo4j is available this will query substitute relationships; otherwise
     a small hard-coded map is used.
@@ -119,21 +123,21 @@ def suggest_substitutes(ingredient_id: str, limit: int = 5):
         try:
             with _driver.session() as session:
                 q = (
-                    "MATCH (i:Ingredient {id: $id})-[:SUBSTITUTE]->(s:Ingredient) "
-                    "RETURN s.id AS id LIMIT $limit"
+                    "MATCH (i:Ingredient {name: $name})-[:SUBSTITUTED_BY]->(s:Ingredient) "
+                    "RETURN s.name AS name LIMIT $limit"
                 )
-                rows = session.run(q, id=str(ingredient_id), limit=limit)
-                return [r["id"] for r in rows]
+                rows = session.run(q, name=ingredient_name, limit=limit)
+                return [r["name"] for r in rows]
         except Exception:
-            logger.exception("Error querying substitutes for %s", ingredient_id)
+            logger.exception("Error querying substitutes for %s", ingredient_name)
 
-    # Stub map
+    # Stub map (unchanged)
     substitutes = {
         "chicken": ["tofu", "tempeh"],
         "rice": ["quinoa"],
         "milk": ["soy milk", "almond milk"],
     }
     for k, v in substitutes.items():
-        if k in str(ingredient_id).lower():
+        if k in ingredient_name.lower():
             return v[:limit]
     return []
