@@ -1,0 +1,10 @@
+﻿fastapi
+uvicorn
+pymongo
+neo4j
+SQLAlchemy
+psycopg2-binary
+python-dotenv
+pydantic[email]
+email-validator
+ijson
