@@ -111,26 +111,56 @@ GOAL_KEYWORDS = {
     "vegan": {"tofu", "tempeh", "bean", "beans", "lentil", "lentils", "seitan"},
 }
 
+
 def score_recipe_against_goal(recipe: Dict[str, Any], goal: str) -> float:
-    ingredients = normalize_ingredients(recipe.get("ingredients", []))
+    """Score recipe based on goal alignment."""
+    ingredients = recipe.get("ingredients", [])
+    normalized = normalize_ingredients(ingredients)
+
     goal_key = goal.lower()
-    # map goal to a keyword set
     keywords = set()
     for g, words in GOAL_KEYWORDS.items():
         if g in goal_key:
             keywords = words
             break
 
+    if not keywords:
+        return 0.0
+
     score = 0.0
-    if keywords:
-        for ing in ingredients:
-            for kw in keywords:
-                if kw in ing:
-                    score += 1.0
+    has_substantial_match = False
+
+    for i, ing in enumerate(ingredients):
+        ing_lower = ing.lower()
+
+        for kw in keywords:
+            if kw in ing_lower:
+                # Check if this is a substantial use of the keyword
+                is_minor = any(word in ing_lower for word in
+                               ["broth", "bouillon", "cube", "powder", "soup", "stock"])
+                is_substantial = any(word in ing_lower for word in
+                                     ["breast", "thigh", "whole", "lb", "lbs", "pound",
+                                      "cut up", "piece", "fillet", "drumstick"])
+
+                if is_substantial:
+                    has_substantial_match = True
+                    position_bonus = 3.0 if i < 3 else 1.0
+                    score += 10.0 * position_bonus
+                elif not is_minor:
+                    score += 2.0
+                else:
+                    score += 0.3
+
+                break
+
+
+    if not has_substantial_match and score > 0:
+        score *= 0.1
+
 
     steps = recipe.get("steps", [])
-    if steps:
-        score += max(0.0, 5.0 - min(5.0, len(steps))) * 0.1
+    if len(steps) <= 3:
+        score += 0.5
 
     return float(score)
 
