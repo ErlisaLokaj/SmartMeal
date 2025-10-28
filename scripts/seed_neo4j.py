@@ -102,30 +102,29 @@ def write_batch(tx, batch: List[Dict]):
 
 
 def seed(
-    uri: str,
-    user: str,
-    password: str,
-    file: str,
-    batch_size: int = 1000,
-    create_constraints: bool = True,
+        uri: str,
+        user: str,
+        password: str,
+        file: str,
+        batch_size: int = 1000,
+        create_constraints: bool = True,
 ):
     logger.info("Connecting to Neo4j %s", uri)
     driver = GraphDatabase.driver(uri, auth=basic_auth(user, password))
     try:
         with driver.session() as session:
-            session.write_transaction(lambda tx: None)  # quick connectivity check
+            # Quick connectivity check (updated for Neo4j 5.x)
+            session.run("RETURN 1")
+
             if create_constraints:
-                session.write_transaction(lambda tx: ensure_constraints(session))
+                ensure_constraints(session)
 
             logger.info("Starting load from %s (batch_size=%s)", file, batch_size)
             it = stream_pairs(file)
             total = 0
             for batch in chunked(it, batch_size):
-
-                def _write(tx):
-                    write_batch(tx, batch)
-
-                session.write_transaction(_write)
+                # Use execute_write instead of write_transaction
+                session.execute_write(lambda tx: write_batch(tx, batch))
                 total += len(batch)
                 logger.info("Wrote batch, total items processed: %d", total)
 
