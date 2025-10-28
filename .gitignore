@@ -10,3 +10,4 @@ env/
 *.sh
 .env
 .venv/
+.py
