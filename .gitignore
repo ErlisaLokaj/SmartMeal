@@ -6,7 +6,6 @@ env/
 .idea/
 .vscode/
 .DS_Store
-*.sh
 .env
 .venv/
-.py
+.pytest_cache/
