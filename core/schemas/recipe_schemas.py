@@ -1,7 +1,7 @@
 """Pydantic schemas for MongoDB recipe documents."""
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID, uuid4
 from datetime import datetime
 
@@ -143,3 +143,48 @@ class RecipeCreate(BaseModel):
                 )
             )
         )
+
+
+# Add these to the existing recipe_schemas.py file
+
+class RecipeRecommendation(BaseModel):
+    """Recipe recommendation response."""
+    recipe_id: str = Field(alias="_id")
+    title: str
+    slug: str
+    tags: List[str]
+    servings: int
+    cuisine: str = Field(default="International", alias="cuisine_id")
+    ingredients_count: int
+    total_time_min: int = 0
+    match_score: float = 0.0  # How well it matches user preferences
+    pantry_match_count: int = 0  # How many pantry items it uses
+
+    class Config:
+        populate_by_name = True
+
+    @classmethod
+    def from_recipe(cls, recipe: Dict[str, Any], score: float = 0, pantry_matches: int = 0):
+        """Create from MongoDB recipe document."""
+        # Calculate total time from steps
+        total_time = sum(step.get("duration_min", 0) for step in recipe.get("steps", []))
+
+        return cls(
+            _id=recipe.get("_id"),
+            title=recipe.get("title", "Untitled"),
+            slug=recipe.get("slug", ""),
+            tags=recipe.get("tags", []),
+            servings=recipe.get("yields", {}).get("servings", 4),
+            cuisine_id=recipe.get("cuisine_id", "International"),
+            ingredients_count=len(recipe.get("ingredients", [])),
+            total_time_min=total_time,
+            match_score=score,
+            pantry_match_count=pantry_matches
+        )
+
+
+class RecommendationRequest(BaseModel):
+    """Request for recipe recommendations."""
+    user_id: UUID
+    limit: int = Field(default=10, ge=1, le=50)
+    tags: Optional[List[str]] = None  # Optional tag filters

@@ -14,6 +14,8 @@ from core.schemas.profile_schemas import (
     PantryItemCreate,
     PantryItemCreateRequest,
 )
+from core.services.recommendation_service import RecommendationService
+from core.schemas.recipe_schemas import RecipeRecommendation, RecommendationRequest
 
 router = APIRouter(prefix="", tags=["SmartMeal"])
 
@@ -296,3 +298,40 @@ def delete_allergy(user_id: UUID, ingredient_id: UUID, db: Session = Depends(get
             detail=f"Allergy {ingredient_id} not found for user {user_id}",
         )
     return {"status": "ok", "removed": str(ingredient_id)}
+
+
+@router.get("/recommendations/{user_id}", response_model=List[RecipeRecommendation])
+def get_recommendations(
+        user_id: UUID,
+        limit: int = 10,
+        db: Session = Depends(get_db)
+):
+    """
+    Get personalized recipe recommendations for a user.
+
+    Usage:
+      GET /recommendations/{user_id}           (returns 10 by default)
+      GET /recommendations/{user_id}?limit=5   (returns 5)
+    """
+    try:
+        recipes = RecommendationService.recommend(
+            db=db,
+            user_id=user_id,
+            limit=limit,
+            tag_filters=None
+        )
+
+        return [
+            RecipeRecommendation.from_recipe(
+                recipe,
+                score=recipe.get("match_score", 0),
+                pantry_matches=recipe.get("pantry_match_count", 0)
+            )
+            for recipe in recipes
+        ]
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error generating recommendations"
+        )
