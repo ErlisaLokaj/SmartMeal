@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, validator
 from typing import Optional, List
 from datetime import datetime
 from uuid import UUID
+from core.database.models import *
 
 
 class AllergyCreate(BaseModel):

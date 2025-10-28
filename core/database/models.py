@@ -9,6 +9,7 @@ from sqlalchemy.orm import relationship, sessionmaker
 from sqlalchemy.sql import func
 import uuid
 import enum
+from core.config import POSTGRES_DB_URL
 
 Base = declarative_base()
 engine = create_engine(POSTGRES_DB_URL, echo=False, future=True)
