@@ -3,6 +3,8 @@
 
 from typing import Optional, Dict, List, Any
 import logging
+import os
+from pymongo import MongoClient
 
 logger = logging.getLogger("smartmeal.mongo")
 
@@ -10,16 +12,25 @@ _client = None
 _db = None
 
 
+# ------------------ Connection ------------------
+def _get_db():
+    """Lazy init DB connection."""
+    global _client, _db
+    if _db is not None:
+        return _db
+    uri = os.getenv("MONGO_URI", "mongodb://mongo:27017")
+    dbname = os.getenv("MONGO_DB", "smartmeal")
+    _client = MongoClient(uri)
+    _db = _client[dbname]
+    return _db
+
+
 def connect(uri: str, db_name: str = "smartmeal"):
-    """Initialize MongoDB client."""
     global _client, _db
     try:
-        from pymongo import MongoClient
-
         _client = MongoClient(uri)
         _db = _client[db_name]
-        # Test connection
-        _client.admin.command('ping')
+        _client.admin.command("ping")
         logger.info("Connected to MongoDB %s (database: %s)", uri, db_name)
     except Exception as exc:
         _client = None
@@ -252,4 +263,51 @@ def get_random_recipes(limit: int = 10) -> List[Dict[str, Any]]:
             logger.exception("Error getting random recipes")
             return []
 
-    return []
+
+# ------------------ Use cases 3-4 ------------------
+def search_recipes_mongo(
+        q: Optional[str] = None,
+        cuisine: Optional[str] = None,
+        limit: int = 20,
+        offset: int = 0,
+) -> List[Dict[str, Any]]:
+    db = _get_db()
+    col = db["recipes"]
+    query: Dict[str, Any] = {}
+
+    ors = []
+    if q:
+        ors.append({"title": {"$regex": q, "$options": "i"}})
+        ors.append({"ingredients": {"$elemMatch": {"$regex": q, "$options": "i"}}})
+    if ors:
+        query["$or"] = ors
+    if cuisine:
+        query["cuisine"] = cuisine
+
+    cursor = col.find(query, {"title": 1}).skip(max(offset, 0)).limit(max(limit, 1))
+    results = []
+    for doc in cursor:
+        rid = str(doc.get("_id"))
+        title = doc.get("title") or doc.get("name")
+        if not title:
+            continue
+        results.append({"id": rid, "title": title})
+    return results
+
+
+def get_recipe_by_id_mongo(recipe_id: str) -> Optional[Dict[str, Any]]:
+    db = _get_db()
+    col = db["recipes"]
+    doc = col.find_one({"_id": recipe_id})
+    if not doc:
+        return None
+    return {
+        "id": str(doc.get("_id")),
+        "title": doc.get("title") or doc.get("name"),
+        "ingredients": doc.get("ingredients") or [],
+        "steps": doc.get("steps") or doc.get("directions") or [],
+        "source": doc.get("source"),
+        "cuisine": doc.get("cuisine"),
+        "tags": doc.get("tags") or [],
+        "images": doc.get("images") or [],
+    }

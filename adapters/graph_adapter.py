@@ -8,6 +8,14 @@ Neo4j instance. For production, install `neo4j` and set NEO4J_* env vars.
 
 from typing import Optional, Dict, Any
 import logging
+from neo4j import GraphDatabase
+import os
+
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4jpassword")
+
+_driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
 logger = logging.getLogger("smartmeal.graph")
 
@@ -141,3 +149,28 @@ def suggest_substitutes(ingredient_name: str, limit: int = 5):
         if k in ingredient_name.lower():
             return v[:limit]
     return []
+
+def get_substitutes_for_recipe(recipe_id: str):
+    """
+    Returns a list of ingredient substitutions for a specific recipe.
+    """
+    query = """
+    MATCH (r:Recipe {id: $id})-[:CONTAINS]->(i:Ingredient)
+    OPTIONAL MATCH (i)-[:SUBSTITUTED_BY]->(s:Ingredient)
+    RETURN DISTINCT i.name AS ingredient, collect(DISTINCT s.name) AS substitutes
+    """
+    with _driver.session() as session:
+        result = session.run(query, {"id": recipe_id})
+        return {r["ingredient"]: r["substitutes"] for r in result if r["substitutes"]}
+
+
+def get_disallowed_ingredient_ids(allergy_names):
+    """Returns a list of ingredient IDs associated with allergies."""
+    query = """
+    MATCH (a:Allergy)-[:TRIGGERS]->(i:Ingredient)
+    WHERE a.name IN $allergies
+    RETURN i.ingredient_id AS id
+    """
+    with _driver.session() as session:
+        result = session.run(query, allergies=allergy_names)
+        return [r["id"] for r in result if r.get("id")]

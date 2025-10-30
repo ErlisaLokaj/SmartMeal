@@ -2,11 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 import json
 import logging
+from fastapi import APIRouter, Query
+from typing import Optional, List, Dict, Any
 from uuid import UUID
 from typing import List, Optional
 
 from core.database.models import get_db, AppUser
 from core.schemas.profile_schemas import *
+from core.services import recipe_service
 from core.services.profile_service import ProfileService
 from core.services.pantry_service import PantryService
 from core.schemas.profile_schemas import (
@@ -14,6 +17,7 @@ from core.schemas.profile_schemas import (
     PantryItemCreate,
     PantryItemCreateRequest,
 )
+from core.services.recipe_service import get_recipe_by_id, search_recipes
 from core.services.recommendation_service import RecommendationService
 from core.schemas.recipe_schemas import RecipeRecommendation, RecommendationRequest
 
@@ -335,3 +339,35 @@ def get_recommendations(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Error generating recommendations"
         )
+
+
+@router.get("/recipes")
+def search_recipes_endpoint(
+        q: Optional[str] = Query(default=None),
+        cuisine: Optional[str] = Query(default=None),
+        include: Optional[str] = Query(default=None),
+        exclude: Optional[str] = Query(default=None),
+        user_id: Optional[str] = Query(default=None),
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+) -> List[Dict[str, Any]]:
+    try:
+        return recipe_service.search_recipes(
+            user_id=user_id,
+            q=q,
+            cuisine=cuisine,
+            include=include,
+            exclude=exclude,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as e:
+        logger.exception("recipes search failed")
+        raise HTTPException(status_code=500, detail="search_failed")
+
+@router.get("/recipes/{recipe_id}")
+def api_get_recipe(recipe_id: str) -> Dict[str, Any]:
+    doc = get_recipe_by_id(recipe_id)
+    if not doc:
+        return {}
+    return doc
