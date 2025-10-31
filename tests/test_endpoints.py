@@ -31,6 +31,7 @@ import pytest
 from main import app
 from core.services import profile_service, pantry_service
 from core.schemas.profile_schemas import PantryItemCreate
+from core.exceptions import ServiceValidationError
 
 # Create TestClient after we've disabled DB init
 client = TestClient(app)
@@ -113,16 +114,32 @@ def test_users_list_and_create_and_get_and_delete(monkeypatch):
 
 def test_update_profile(monkeypatch):
     user = make_user()
-
     def fake_upsert(db, uid, profile_data):
-        # return same user for test
-        return user
+        # mimic new service signature returning (user, created_flag)
+        return user, False
 
     monkeypatch.setattr(profile_service.ProfileService, "upsert_profile", fake_upsert)
     payload = {"full_name": "Updated"}
     r = client.put(f"/users/{user.user_id}", json=payload)
     assert r.status_code == 200
     assert r.json()["full_name"] == user.full_name
+
+
+def test_update_profile_create_on_put(monkeypatch):
+    # When the service indicates a creation happened, route should return 201 and Location header
+    created_user = make_user()
+
+    def fake_upsert_created(db, uid, profile_data):
+        return created_user, True
+
+    monkeypatch.setattr(profile_service.ProfileService, "upsert_profile", fake_upsert_created)
+    payload = {"full_name": "New User", "email": "new@example.com"}
+    r = client.put(f"/users/{created_user.user_id}", json=payload)
+    assert r.status_code == 201
+    # Location header should be set to new resource
+    assert r.headers.get("location") == f"/users/{created_user.user_id}"
+    body = r.json()
+    assert body["user_id"] == str(created_user.user_id)
 
 
 def test_dietary_get_set(monkeypatch):
@@ -272,3 +289,47 @@ def test_pantry_endpoints(monkeypatch):
     )
     r4 = client.delete(f"/pantry/{item.pantry_item_id}")
     assert r4.status_code == 200
+
+
+def test_update_profile_service_error(monkeypatch):
+    user = make_user()
+
+    def fake_upsert_error(db, uid, profile_data):
+        raise ServiceValidationError("User not found")
+
+    monkeypatch.setattr(profile_service.ProfileService, "upsert_profile", fake_upsert_error)
+    r = client.put(f"/users/{user.user_id}", json={"full_name": "X"})
+    assert r.status_code == 400
+
+
+def test_pantry_quantity_validation_and_response(monkeypatch):
+    # Validation: quantity must be > 0
+    user = make_user()
+    item = make_pantry_item(user_id=user.user_id)
+
+    # invalid quantity -> 422 from FastAPI/Pydantic
+    r = client.post(
+        "/pantry",
+        json={
+            "user_id": str(user.user_id),
+            "item": {"ingredient_id": str(item.ingredient_id), "quantity": 0, "unit": "pcs"},
+        },
+    )
+    assert r.status_code == 422
+
+    # valid quantity -> use monkeypatched service to return an item and assert body
+    returned = make_pantry_item(user_id=user.user_id)
+    returned.quantity = 3.5
+    returned.best_before = datetime.utcnow().date()
+
+    monkeypatch.setattr(pantry_service.PantryService, "add_item", lambda db, uid, it: returned)
+    r2 = client.post(
+        "/pantry",
+        json={
+            "user_id": str(user.user_id),
+            "item": {"ingredient_id": str(item.ingredient_id), "quantity": 3.5, "unit": "pcs"},
+        },
+    )
+    assert r2.status_code == 201
+    body = r2.json()
+    assert float(body["quantity"]) == 3.5

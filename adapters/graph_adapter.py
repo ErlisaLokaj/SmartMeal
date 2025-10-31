@@ -1,13 +1,6 @@
-"""Neo4j adapter for ingredient metadata and substitution lookups.
-
-This module provides a small wrapper around the neo4j driver. If the
-`neo4j` package is not installed, the module falls back to a lightweight
-in-memory stub so the application (and tests) can run without a running
-Neo4j instance. For production, install `neo4j` and set NEO4J_* env vars.
-"""
-
 from typing import Optional, Dict, Any
 import logging
+from neo4j import GraphDatabase
 
 logger = logging.getLogger("smartmeal.graph")
 
@@ -22,7 +15,7 @@ def connect(uri: str, user: str, password: str):
     """
     global _driver
     try:
-        from neo4j import GraphDatabase
+        
 
         _driver = GraphDatabase.driver(uri, auth=(user, password))
         logger.info("Connected to Neo4j %s", uri)
@@ -59,10 +52,12 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
     if _driver is not None:
         try:
             with _driver.session() as session:
-                result = session.run(
-                    "MATCH (i:Ingredient {id: $id}) RETURN i.category AS category, i.perishability AS perishability, i.shelf_life_days AS shelf_life_days",
-                    id=str(ingredient_id),
+                # Search by common identifier properties: id (canonical), proc_id (from processed data), or name
+                q = (
+                    "MATCH (i:Ingredient) WHERE i.id = $id OR i.proc_id = $id OR i.name = $id "
+                    "RETURN i.category AS category, i.perishability AS perishability, i.shelf_life_days AS shelf_life_days"
                 )
+                result = session.run(q, id=str(ingredient_id))
                 rec = result.single()
                 if rec:
                     return {
@@ -70,9 +65,7 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
                         "perishability": rec["perishability"] or "non_perishable",
                         "defaults": {
                             "shelf_life_days": (
-                                int(rec["shelf_life_days"])
-                                if rec["shelf_life_days"] is not None
-                                else None
+                                int(rec["shelf_life_days"]) if rec["shelf_life_days"] is not None else None
                             )
                         },
                     }

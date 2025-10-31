@@ -1,9 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+import json
+import logging
+from uuid import UUID
+from typing import Optional
+from pydantic import EmailStr
 
 from core.database.models import get_db
 from core.schemas.profile_schemas import *
 from core.services.profile_service import *
+from core.exceptions import ServiceValidationError, NotFoundError
+
+logger = logging.getLogger("smartmeal.api.profile_routes")
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 
@@ -92,9 +100,14 @@ def update_profile(
             preferences=[PreferenceResponse.from_orm(p) for p in user.preferences]
         )
         
-    except ValueError as e:
+    except ServiceValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
     except Exception as e:
@@ -125,7 +138,7 @@ def create_user(
             allergies=[],
             preferences=[]
         )
-    except ValueError as e:
+    except ServiceValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(e)

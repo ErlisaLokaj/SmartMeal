@@ -17,15 +17,8 @@ import logging
 import os
 import sys
 from typing import Iterator, List, Dict
-
-try:
-    import ijson
-
-    _HAS_IJSON = True
-except Exception:
-    _HAS_IJSON = False
-
 from neo4j import GraphDatabase, basic_auth
+import ijson
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("neo4j-seed")
@@ -33,18 +26,12 @@ logger = logging.getLogger("neo4j-seed")
 
 def stream_pairs(path: str) -> Iterator[Dict]:
     """Yield substitution pair objects from a JSON file. Supports streaming if ijson is installed."""
-    if _HAS_IJSON:
-        logger.info("Using ijson for streaming JSON")
-        with open(path, "rb") as fh:
-            # Expecting top-level array of objects
-            for item in ijson.items(fh, "item"):
-                yield item
-    else:
-        logger.info("ijson not installed; loading whole file into memory")
-        with open(path, "r", encoding="utf8") as fh:
-            data = json.load(fh)
-            for item in data:
-                yield item
+    logger.info("Using ijson for streaming JSON")
+    with open(path, "rb") as fh:
+        # Expecting top-level array of objects
+        for item in ijson.items(fh, "item"):
+            yield item
+
 
 
 def chunked(iterator: Iterator, size: int) -> Iterator[List]:
@@ -58,13 +45,16 @@ def chunked(iterator: Iterator, size: int) -> Iterator[List]:
         yield batch
 
 
-def ensure_constraints(session):
+def ensure_constraints(tx):
     # Create constraints that make MERGE idempotent (Neo4j 4+ syntax)
     logger.info("Ensuring constraints")
-    session.run(
+    tx.run(
         "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.proc_id) IS UNIQUE"
     )
-    session.run(
+    tx.run(
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.id) IS UNIQUE"
+    )
+    tx.run(
         "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.name) IS UNIQUE"
     )
 
@@ -74,14 +64,16 @@ def write_batch(tx, batch: List[Dict]):
     # We build a parameterized UNWIND payload to MERGE nodes and relationships.
     pairs = []
     for item in batch:
-        base = {"name": item.get("name"), "proc_id": item.get("proc_id")}
+        base = {"name": item.get("name"), "proc_id": item.get("proc_id"), "id": item.get("id")}
         for sub in item.get("substitutes", []) or []:
             pairs.append(
                 {
                     "base_name": base["name"],
                     "base_proc": base.get("proc_id"),
+                    "base_id": base.get("id"),
                     "sub_name": sub.get("name"),
                     "sub_proc": sub.get("proc_id"),
+                    "sub_id": sub.get("id"),
                 }
             )
 
@@ -89,12 +81,13 @@ def write_batch(tx, batch: List[Dict]):
         return
 
     # UNWIND pairs and MERGE Ingredient nodes by proc_id when present otherwise by name
+    # Create or update nodes; set both proc_id and id when available and set shelf_life_days if present in pair
     query = """
     UNWIND $pairs AS p
     MERGE (b:Ingredient {name: p.base_name})
-    SET b.proc_id = coalesce(b.proc_id, p.base_proc)
+    SET b.proc_id = coalesce(b.proc_id, p.base_proc), b.id = coalesce(b.id, p.base_id)
     MERGE (s:Ingredient {name: p.sub_name})
-    SET s.proc_id = coalesce(s.proc_id, p.sub_proc)
+    SET s.proc_id = coalesce(s.proc_id, p.sub_proc), s.id = coalesce(s.id, p.sub_id)
     MERGE (b)-[r:SUBSTITUTED_BY]->(s)
     RETURN count(r) as created
     """

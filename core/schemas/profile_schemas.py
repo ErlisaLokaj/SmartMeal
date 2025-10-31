@@ -1,7 +1,8 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, date
 from uuid import UUID
+from decimal import Decimal
 from core.database.models import GoalType, ActivityLevel, PreferenceStrength
 
 
@@ -12,9 +13,9 @@ class UserCreate(BaseModel):
 
 class PantryItemCreate(BaseModel):
     ingredient_id: UUID
-    quantity: float
+    quantity: Decimal = Field(..., gt=0)
     unit: Optional[str] = None
-    best_before: Optional[datetime] = None
+    best_before: Optional[date] = None
 
 
 class PantryItemCreateRequest(BaseModel):
@@ -33,9 +34,9 @@ class PantryItemResponse(BaseModel):
     pantry_item_id: UUID
     user_id: UUID
     ingredient_id: UUID
-    quantity: float
+    quantity: Decimal
     unit: Optional[str]
-    best_before: Optional[datetime]
+    best_before: Optional[date]
     source: Optional[str]
     created_at: datetime
     updated_at: datetime
@@ -98,6 +99,8 @@ class DietaryProfileResponse(BaseModel):
 
 class ProfileUpdateRequest(BaseModel):
     """Complete profile update request"""
+    # If email is provided for a PUT on a non-existing user, the user will be created.
+    email: Optional[EmailStr] = None
 
     full_name: Optional[str] = Field(None, min_length=1, max_length=200)
     dietary_profile: Optional[DietaryProfileCreate] = None

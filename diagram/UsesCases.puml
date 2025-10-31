@@ -17,7 +17,7 @@
 
 ' ---------- (1) Manage Profile & Preferences ----------
 @startuml Manage Profile & Preferences
-title Manage Profile & Preferences
+title Manage Profile & Preferences (upsert semantics + diff updates)
 autonumber
 actor User
 participant "Frontend" as FE
@@ -26,24 +26,47 @@ participant "ProfileService" as PS
 database "PostgreSQL" as PG
 
 User -> FE: Open Profile / Edit Preferences
-FE -> C: PUT /profile {goals, prefs, allergies}
-C -> PS: upsertProfile(userId, data)
+FE -> C: PUT /users/{user_id} {goals, preferences, allergies, email?}
+C -> C: validate payload (schema)
+alt invalid
+  C --> FE: 400 Bad Request
+else valid
+  C -> PS: upsert_profile(user_id, data)
 
-PS -> PG: upsert app_user/dietary_profile
-PG --> PS: ok
-PS -> PG: upsert user_preference[*]
-PG --> PS: ok
-PS -> PG: upsert user_allergy[*]
-PG --> PS: ok
+  PS -> PG: begin transaction
+  alt user exists
+    PS -> PG: UPDATE app_user SET ... WHERE user_id = :id
+  else create-on-PUT (if email provided)
+    PS -> PG: INSERT app_user (user_id, email, ...)  -- create
+  end
+  PG --> PS: ok
 
-PS --> C: profileSaved
-C --> FE: 200 OK + updated profile
+  PS -> PG: SELECT user_preference[*] WHERE user_id = :id
+  PG --> PS: existing_prefs
+  PS -> PS: compute diff (inserts, updates, deletes)
+  PS -> PG: INSERT/UPDATE/DELETE user_preference[*] (only diffs)
+  PG --> PS: ok
+
+  PS -> PG: SELECT user_allergy[*] WHERE user_id = :id
+  PG --> PS: existing_allergies
+  PS -> PS: compute diff (inserts, deletes)
+  PS -> PG: INSERT/DELETE user_allergy[*]
+  PG --> PS: ok
+
+  PS -> PG: commit transaction
+  PS --> C: (user, created_flag)
+  alt created_flag == true
+    C --> FE: 201 Created + Location: /users/{user_id} + profile
+  else
+    C --> FE: 200 OK + updated profile
+  end
+end
 @enduml
 
 
 ' ---------- (2) Manage Pantry ----------
 @startuml Manage Pantry
-title Manage Pantry (Add/Update + Expiry Estimation)
+title Manage Pantry (Add/Update, expiry estimation, upsert semantics)
 autonumber
 actor User
 participant "Frontend" as FE
@@ -52,17 +75,30 @@ participant "PantryService" as P
 database "PostgreSQL" as PG
 database "Neo4j" as NJ
 
-User -> FE: Add pantry item {ingredient, qty, unit}
-FE -> C: POST /pantry
-C -> P: addPantryItem(userId, ingredient, qty, unit)
+User -> FE: Add pantry item {ingredient_id, qty, unit, best_before?}
+FE -> C: POST /users/{user_id}/pantry
+C -> C: validate payload (quantity>0, unit)
+C -> P: add_item(user_id, payload)
 
 P -> NJ: getIngredientMeta(ingredient_id)
-NJ --> P: category, perishability, defaults
-P -> P: estimateExpiry(best_before)
-P -> PG: insert pantry_item {best_before}
-PG --> P: row
+note right of NJ: graph lookup will try id OR proc_id OR name
+NJ --> P: {category, perishability, defaults (shelf_life_days), proc_id}
 
-P --> C: pantryItemCreated
+P -> P: if best_before missing -> estimateExpiry(now + shelf_life_days)
+
+P -> PG: begin transaction
+P -> PG: SELECT pantry_item FOR UPDATE
+note right: filter by (user_id, ingredient_id, unit) to lock row
+alt row exists
+  P -> PG: UPDATE pantry_item SET quantity = quantity + :qty, best_before = COALESCE(:bb, best_before)
+  PG --> P: updated row
+else row missing
+  P -> PG: INSERT INTO pantry_item (...) VALUES (...)
+  PG --> P: inserted row
+end
+P -> PG: commit transaction
+
+P --> C: pantryItemCreated (201) with item
 C --> FE: 201 Created + item
 @enduml
 

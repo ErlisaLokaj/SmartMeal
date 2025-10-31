@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
 from sqlalchemy.orm import Session
 import json
 import logging
 from uuid import UUID
 from typing import List, Optional
 
+from adapters import graph_adapter
 from core.database.models import get_db, AppUser
 from core.schemas.profile_schemas import *
 from core.services.profile_service import ProfileService
@@ -14,6 +15,7 @@ from core.schemas.profile_schemas import (
     PantryItemCreate,
     PantryItemCreateRequest,
 )
+from core.exceptions import ServiceValidationError, NotFoundError
 
 router = APIRouter(prefix="", tags=["SmartMeal"])
 
@@ -75,11 +77,16 @@ def update_profile(
     This endpoint implements the complete sequence diagram flow.
     """
     try:
-        user = ProfileService.upsert_profile(db, user_id, profile_data)
-        return _user_to_response(user)
-
-    except ValueError as e:
+        user, created = ProfileService.upsert_profile(db, user_id, profile_data)
+        resp = _user_to_response(user)
+        if created:
+            headers = {"Location": f"/users/{user.user_id}"}
+            return Response(content=resp.model_dump_json(), status_code=status.HTTP_201_CREATED, media_type="application/json", headers=headers)
+        return resp
+    except ServiceValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
         raise HTTPException(
@@ -96,8 +103,11 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     try:
         new_user = ProfileService.create_user(db, user.email, user.full_name)
         return _user_to_response(new_user)
-    except ValueError as e:
+    except ServiceValidationError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error creating user: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.get("/users", response_model=List[UserProfileResponse])
@@ -123,13 +133,37 @@ def health_check():
     return {"status": "ok", "service": "SmartMeal"}
 
 
+@router.get("/neo4j/seed-status")
+def neo4j_seed_status():
+    """Return a simple count of Ingredient nodes in Neo4j. Uses graph_adapter when available."""
+    try:
+        
+
+        # Attempt to query a fake id of 'count' — the adapter will use driver if configured
+        # Use the internal driver if present to run a count query for stronger verification.
+        if getattr(graph_adapter, "_driver", None) is not None:
+            with graph_adapter._driver.session() as s:
+                r = s.run("MATCH (n:Ingredient) RETURN count(n) AS cnt")
+                cnt = r.single().get("cnt")
+                return {"neo4j_ingredient_count": int(cnt)}
+        # driver not present — return not available
+        return {"neo4j_ingredient_count": None, "note": "driver not configured"}
+    except Exception as e:
+        return {"neo4j_ingredient_count": None, "error": str(e)}
+
+
 @router.put("/pantry", response_model=List[PantryItemResponse])
 def update_pantry(pantry: PantryUpdateRequest, db: Session = Depends(get_db)):
     try:
         items = PantryService.set_pantry(db, pantry.user_id, pantry.items)
         return [PantryItemResponse.model_validate(i) for i in items]
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ServiceValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error updating pantry: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.get("/pantry", response_model=List[PantryItemResponse])
@@ -146,8 +180,13 @@ def add_pantry_item(payload: PantryItemCreateRequest, db: Session = Depends(get_
     try:
         p = PantryService.add_item(db, payload.user_id, payload.item)
         return PantryItemResponse.model_validate(p)
-    except ValueError as e:
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ServiceValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error adding pantry item: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.delete("/pantry/{pantry_item_id}")
@@ -210,8 +249,13 @@ def set_dietary_profile(
             ),
             updated_at=dp.updated_at,
         )
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ServiceValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error setting dietary profile: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.get("/users/{user_id}/preferences", response_model=List[PreferenceResponse])
@@ -227,8 +271,13 @@ def set_preferences(
     try:
         prefs = ProfileService.set_preferences(db, user_id, preferences)
         return [PreferenceResponse.model_validate(p) for p in prefs]
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ServiceValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error setting preferences: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.get("/users/{user_id}/allergies", response_model=List[AllergyResponse])
@@ -244,8 +293,13 @@ def set_allergies(
     try:
         al = ProfileService.set_allergies(db, user_id, allergies)
         return [AllergyResponse.model_validate(a) for a in al]
-    except ValueError as e:
+    except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ServiceValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error setting allergies: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.post(
@@ -259,8 +313,13 @@ def add_preference(
     try:
         p = ProfileService.add_preference(db, user_id, preference)
         return PreferenceResponse.model_validate(p)
-    except ValueError as e:
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ServiceValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error adding preference: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.delete("/users/{user_id}/preferences/{tag}")
@@ -283,8 +342,13 @@ def add_allergy(user_id: UUID, allergy: AllergyCreate, db: Session = Depends(get
     try:
         a = ProfileService.add_allergy(db, user_id, allergy)
         return AllergyResponse.model_validate(a)
-    except ValueError as e:
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ServiceValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error adding allergy: %s", e)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
 
 
 @router.delete("/users/{user_id}/allergies/{ingredient_id}")

@@ -8,3 +8,5 @@ python-dotenv
 pydantic[email]
 email-validator
 ijson
+pytest
+httpx
