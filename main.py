@@ -1,43 +1,65 @@
+"""
+SmartMeal FastAPI Application
+Main entry point with improved architecture, middleware, and configuration management
+"""
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import logging
 import uvicorn
-from api.routes import router
-from core.database.models import init_database
-from adapters import graph_adapter
-from core.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 from contextlib import asynccontextmanager
 import anyio
 import inspect
 from typing import Optional
-import os
 
-# Setup logging
+# Import routes from new structure
+from api.routes import users, profiles, pantry, waste, health
+
+# Import database and adapters
+from domain.models import init_database
+from adapters import graph_adapter
+
+# Import configuration
+from core.config import settings, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+
+# Import middleware
+from api.middleware import (
+    RequestLoggingMiddleware,
+    validation_exception_handler,
+    http_exception_handler,
+    service_validation_exception_handler,
+    not_found_exception_handler,
+    general_exception_handler,
+)
+from core.exceptions import ServiceValidationError, NotFoundError
+
+# Setup logging with configured level and format
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    level=getattr(logging, settings.log_level.upper()), format=settings.log_format
 )
 _logger = logging.getLogger("smartmeal.main")
-
-# Configuration for DB init retries (helpful when DB container takes time to start)
-MAX_DB_INIT_ATTEMPTS = int(os.getenv("DB_INIT_ATTEMPTS", "8"))
-DB_INIT_DELAY_SEC = float(os.getenv("DB_INIT_DELAY_SEC", "2.0"))
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context that initializes the DB on startup.
-
-    It detects whether `init_database` is async or sync and runs it appropriately.
-    Retries a few times with delay to tolerate DB startup lag in Docker Compose.
+    """
+    Lifespan context manager for application startup and shutdown.
+    Handles database initialization and Neo4j connection with retries.
     """
     is_coro_fn = inspect.iscoroutinefunction(init_database)
     last_exc: Optional[Exception] = None
 
-    for attempt in range(1, MAX_DB_INIT_ATTEMPTS + 1):
+    # Startup: Initialize database
+    _logger.info(f"Starting SmartMeal in {settings.environment.value} mode")
+
+    for attempt in range(1, settings.db_init_attempts + 1):
         try:
             if is_coro_fn:
                 await init_database()
             else:
-                # run blocking init in a thread to avoid blocking the event loop
+                # Run blocking init in a thread to avoid blocking the event loop
                 await anyio.to_thread.run_sync(init_database)
 
             _logger.info("Database initialization succeeded")
@@ -47,50 +69,84 @@ async def lifespan(app: FastAPI):
             _logger.warning(
                 "Database init attempt %d/%d failed: %s",
                 attempt,
-                MAX_DB_INIT_ATTEMPTS,
+                settings.db_init_attempts,
                 exc,
             )
-            if attempt < MAX_DB_INIT_ATTEMPTS:
-                await anyio.sleep(DB_INIT_DELAY_SEC)
+            if attempt < settings.db_init_attempts:
+                await anyio.sleep(settings.db_init_delay_sec)
             else:
                 _logger.error(
                     "Database initialization failed after %d attempts", attempt
                 )
                 raise
-    # Initialize Neo4j connection (best-effort). If driver isn't available or
-    # connection fails, the adapter will fall back to a stub implementation.
+
+    # Initialize Neo4j connection (best-effort)
     try:
         graph_adapter.connect(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
-    except Exception:
-        _logger.exception(
-            "Failed to initialize Neo4j adapter; continuing with stub/fallback"
+        _logger.info("Neo4j connection established")
+    except Exception as e:
+        _logger.warning(
+            "Failed to initialize Neo4j adapter; continuing with stub/fallback: %s", e
         )
+
     try:
         yield
     finally:
-        # close Neo4j on shutdown
+        # Shutdown: Close connections
+        _logger.info("Shutting down SmartMeal")
         try:
             graph_adapter.close()
-        except Exception:
-            _logger.exception("Error closing Neo4j adapter during shutdown")
+            _logger.info("Neo4j connection closed")
+        except Exception as e:
+            _logger.exception("Error closing Neo4j adapter during shutdown: %s", e)
 
 
-# Create FastAPI app with the lifespan manager
+# Create FastAPI application with enhanced configuration
 app = FastAPI(
-    title="SmartMeal - Profile Management",
-    version="1.0.0",
-    description="Manage user profiles, dietary preferences, allergies",
+    title=settings.api_title,
+    version=settings.app_version,
+    description=settings.api_description,
     lifespan=lifespan,
+    debug=settings.debug,
+    openapi_url=(
+        f"{settings.api_prefix}/openapi.json" if not settings.is_production() else None
+    ),
+    docs_url=f"{settings.api_prefix}/docs" if not settings.is_production() else None,
+    redoc_url=f"{settings.api_prefix}/redoc" if not settings.is_production() else None,
 )
 
-# Include routers
-app.include_router(router)
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=settings.cors_allow_methods,
+    allow_headers=settings.cors_allow_headers,
+)
 
+# Add request logging middleware
+app.add_middleware(RequestLoggingMiddleware)
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok", "service": "profile-management"}
+# Register exception handlers
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(ServiceValidationError, service_validation_exception_handler)
+app.add_exception_handler(NotFoundError, not_found_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
+
+# Include routers from new modular structure
+app.include_router(users.router, prefix=settings.api_prefix)
+app.include_router(profiles.router, prefix=settings.api_prefix)
+app.include_router(pantry.router, prefix=settings.api_prefix)
+app.include_router(waste.router, prefix=settings.api_prefix)
+app.include_router(health.router, prefix=settings.api_prefix)
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.is_development(),
+        log_level=settings.log_level.lower(),
+    )

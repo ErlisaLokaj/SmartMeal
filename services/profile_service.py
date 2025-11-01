@@ -5,8 +5,18 @@ from sqlalchemy.exc import IntegrityError
 import json
 import logging
 
-from core.database.models import *
-from core.schemas.profile_schemas import *
+from domain.models import (
+    AppUser,
+    DietaryProfile,
+    UserAllergy,
+    UserPreference,
+)
+from domain.schemas.profile_schemas import (
+    ProfileUpdateRequest,
+    DietaryProfileCreate,
+    AllergyCreate,
+    PreferenceCreate,
+)
 from core.exceptions import ServiceValidationError, NotFoundError
 
 logger = logging.getLogger("smartmeal.profile")
@@ -51,7 +61,11 @@ class ProfileService:
                 # If the user doesn't exist, create only if email provided
                 if not user:
                     if profile_data.email:
-                        user = AppUser(user_id=user_id, email=profile_data.email, full_name=profile_data.full_name)
+                        user = AppUser(
+                            user_id=user_id,
+                            email=profile_data.email,
+                            full_name=profile_data.full_name,
+                        )
                         db.add(user)
                         # flush so relationships can reference the user
                         db.flush()
@@ -73,7 +87,9 @@ class ProfileService:
 
                 # 4. Upsert allergies (diff-based)
                 if profile_data.allergies is not None:
-                    ProfileService._upsert_allergies(db, user_id, profile_data.allergies)
+                    ProfileService._upsert_allergies(
+                        db, user_id, profile_data.allergies
+                    )
 
                 # 5. Upsert preferences (diff-based)
                 if profile_data.preferences is not None:
@@ -98,7 +114,9 @@ class ProfileService:
 
         except IntegrityError as e:
             logger.error(f"profile_upsert_failed user_id={user_id} error={str(e)}")
-            raise ServiceValidationError("Database integrity error during profile update")
+            raise ServiceValidationError(
+                "Database integrity error during profile update"
+            )
         except Exception as e:
             logger.error(f"profile_upsert_error user_id={user_id} error={str(e)}")
             raise
@@ -130,8 +148,12 @@ class ProfileService:
                 protein_target_g=profile_data.protein_target_g,
                 carb_target_g=profile_data.carb_target_g,
                 fat_target_g=profile_data.fat_target_g,
-                cuisine_likes=json.dumps(profile_data.model_dump().get("cuisine_likes") or []),
-                cuisine_dislikes=json.dumps(profile_data.model_dump().get("cuisine_dislikes") or []),
+                cuisine_likes=json.dumps(
+                    profile_data.model_dump().get("cuisine_likes") or []
+                ),
+                cuisine_dislikes=json.dumps(
+                    profile_data.model_dump().get("cuisine_dislikes") or []
+                ),
             )
             db.add(dietary)
 
@@ -168,7 +190,9 @@ class ProfileService:
         db: Session, user_id: UUID, preferences: List[PreferenceCreate]
     ):
         """Diff-based update for preferences: insert new, delete removed, update strength."""
-        existing = db.query(UserPreference).filter(UserPreference.user_id == user_id).all()
+        existing = (
+            db.query(UserPreference).filter(UserPreference.user_id == user_id).all()
+        )
         existing_map = {p.tag: p for p in existing}
 
         incoming_tags = {p.tag for p in preferences}
@@ -184,7 +208,11 @@ class ProfileService:
                 obj = existing_map[pref.tag]
                 obj.strength = pref.strength
             else:
-                db.add(UserPreference(user_id=user_id, tag=pref.tag, strength=pref.strength))
+                db.add(
+                    UserPreference(
+                        user_id=user_id, tag=pref.tag, strength=pref.strength
+                    )
+                )
 
     @staticmethod
     def create_user(

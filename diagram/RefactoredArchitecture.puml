@@ -1,0 +1,95 @@
+@startuml SmartMeal Refactored Architecture
+!define RECTANGLE class
+
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+
+package "Presentation Layer" {
+    [FastAPI App] as app
+    [User Routes] as user_routes
+    [Waste Routes] as waste_routes
+    [Middleware] as middleware
+    
+    app --> user_routes
+    app --> waste_routes
+    app --> middleware
+}
+
+package "Business Logic Layer" {
+    [Profile Service] as profile_service
+    [Waste Service] as waste_service
+    [Pantry Service] as pantry_service
+    
+    user_routes --> profile_service
+    user_routes --> pantry_service
+    waste_routes --> waste_service
+}
+
+package "Data Access Layer" {
+    [User Repository] as user_repo
+    [Waste Repository] as waste_repo
+    [Pantry Repository] as pantry_repo
+    
+    profile_service --> user_repo
+    waste_service --> waste_repo
+    pantry_service --> pantry_repo
+}
+
+package "Database Layer" {
+    database "PostgreSQL" as postgres {
+        [Users]
+        [Profiles]
+        [Pantry]
+        [Waste Logs]
+    }
+    
+    database "Neo4j" as neo4j {
+        [Ingredients]
+        [Recipes]
+        [Substitutions]
+    }
+    
+    database "MongoDB" as mongo {
+        [Recipe Details]
+    }
+    
+    user_repo --> postgres
+    waste_repo --> postgres
+    pantry_repo --> postgres
+    
+    profile_service --> neo4j
+    waste_service --> neo4j
+}
+
+package "Cross-Cutting Concerns" {
+    [Config] as config
+    [Dependencies] as deps
+    [Exceptions] as exc
+    [Logging] as log
+    
+    app --> config
+    app --> deps
+    middleware --> log
+    middleware --> exc
+}
+
+note right of middleware
+  - Request Logging
+  - Error Handling
+  - CORS
+  - Request Tracing
+end note
+
+note right of config
+  - Environment Management
+  - Pydantic Settings
+  - Type Validation
+end note
+
+note right of deps
+  - Dependency Injection
+  - Repository Factories
+  - Database Sessions
+end note
+
+@enduml

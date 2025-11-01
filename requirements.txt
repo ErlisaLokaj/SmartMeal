@@ -6,6 +6,7 @@ SQLAlchemy
 psycopg2-binary
 python-dotenv
 pydantic[email]
+pydantic-settings
 email-validator
 ijson
 pytest

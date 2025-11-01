@@ -66,7 +66,7 @@ end
 
 ' ---------- (2) Manage Pantry ----------
 @startuml Manage Pantry
-title Manage Pantry (Add/Update, expiry estimation, upsert semantics)
+title Manage Pantry (Exception-Based Validation, Multi-User, No Fallbacks)
 autonumber
 actor User
 participant "Frontend" as FE
@@ -75,31 +75,182 @@ participant "PantryService" as P
 database "PostgreSQL" as PG
 database "Neo4j" as NJ
 
+== Add Single Item ==
 User -> FE: Add pantry item {ingredient_id, qty, unit, best_before?}
-FE -> C: POST /users/{user_id}/pantry
-C -> C: validate payload (quantity>0, unit)
-C -> P: add_item(user_id, payload)
-
-P -> NJ: getIngredientMeta(ingredient_id)
-note right of NJ: graph lookup will try id OR proc_id OR name
-NJ --> P: {category, perishability, defaults (shelf_life_days), proc_id}
-
-P -> P: if best_before missing -> estimateExpiry(now + shelf_life_days)
-
-P -> PG: begin transaction
-P -> PG: SELECT pantry_item FOR UPDATE
-note right: filter by (user_id, ingredient_id, unit) to lock row
-alt row exists
-  P -> PG: UPDATE pantry_item SET quantity = quantity + :qty, best_before = COALESCE(:bb, best_before)
-  PG --> P: updated row
-else row missing
-  P -> PG: INSERT INTO pantry_item (...) VALUES (...)
-  PG --> P: inserted row
+FE -> C: POST /pantry {user_id, item}
+C -> C: validate payload (Pydantic: quantity>0, unit)
+alt invalid schema
+  C --> FE: 422 Unprocessable Entity
+else valid
+  C -> P: add_item(user_id, item)
+  
+  P -> PG: verify user exists
+  alt user not found
+    PG --> P: no rows
+    P --> C: NotFoundError
+    C --> FE: 404 User Not Found
+  else user exists
+    PG --> P: user row
+    
+    P -> P: validate_ingredient_data(ingredient_id)
+    P -> NJ: get_ingredient_meta(ingredient_id)
+    note right of NJ: STRICT: No fake fallbacks!\nRaises exception if not found
+    
+    alt Neo4j not connected
+      NJ --> P: RuntimeError("Neo4j driver not initialized")
+      P --> C: ServiceValidationError("Invalid ingredient: Neo4j unavailable")
+      C --> FE: 400 Bad Request (Neo4j unavailable)
+    else ingredient not found
+      NJ --> P: ValueError("Ingredient not found")
+      P --> C: ServiceValidationError("Invalid ingredient: not found")
+      C --> FE: 400 Bad Request (invalid ingredient)
+    else ingredient found
+      NJ --> P: {name, category, perishability, shelf_life_days}
+      
+      P -> P: if best_before missing -> estimate from shelf_life_days
+      
+      P -> PG: begin transaction
+      P -> PG: SELECT pantry_item FOR UPDATE
+      note right: Match by (user_id, ingredient_id, unit, **best_before**)\nBatch-level tracking: separate rows per expiry date
+      alt row exists with SAME expiry date (merge batch)
+        P -> PG: UPDATE pantry_item\nSET quantity = quantity + :qty
+        note right: Same batch → increment quantity
+        PG --> P: updated row
+      else row missing OR DIFFERENT expiry date (new batch)
+        P -> PG: INSERT INTO pantry_item (...) VALUES (...)
+        note right: Different batch → create separate entry
+        PG --> P: inserted row
+      end
+      P -> PG: commit transaction
+      
+      P --> C: PantryItem
+      C --> FE: 201 Created + item
+    end
+  end
 end
-P -> PG: commit transaction
 
-P --> C: pantryItemCreated (201) with item
-C --> FE: 201 Created + item
+== Replace All Items (Bulk Update) ==
+User -> FE: Update entire pantry {items[]}
+FE -> C: PUT /pantry {user_id, items[]}
+C -> C: validate payload (Pydantic)
+alt invalid schema
+  C --> FE: 422 Unprocessable Entity
+else valid
+  C -> P: set_pantry(user_id, items[])
+  
+  P -> PG: verify user exists
+  alt user not found
+    PG --> P: no rows
+    P --> C: NotFoundError
+    C --> FE: 404 User Not Found
+  else user exists
+    PG --> P: user row
+    
+    P -> P: extract all ingredient_ids from items[]
+    P -> P: validate_ingredients_batch(ingredient_ids[])
+    P -> NJ: get_ingredients_batch(ingredient_ids[])
+    note right of NJ: Batch query - STRICT validation\nAll ingredients must exist\nNo fake fallbacks!
+    
+    alt Neo4j not connected
+      NJ --> P: RuntimeError("Neo4j driver not initialized")
+      P --> C: ServiceValidationError("Cannot validate ingredients: Neo4j unavailable")
+      C --> FE: 400 Bad Request
+    else any ingredient not found
+      NJ --> P: ValueError("Ingredients not found: id1, id2, ...")
+      P --> C: ServiceValidationError("Some ingredients not found")
+      C --> FE: 400 Bad Request
+    else all ingredients validated
+      NJ --> P: ingredient_metadata_map {id: {name, category, shelf_life_days}}
+      
+      P -> PG: begin transaction
+      P -> PG: DELETE FROM pantry_item WHERE user_id = :id
+      note right: Atomic replace: delete all + insert new
+      
+      loop for each item in items[]
+        P -> P: estimate best_before from metadata if missing
+        P -> PG: INSERT INTO pantry_item (...)
+        note right: Each item is a separate row\nSame ingredient with different expiry → separate batches
+      end
+      
+      P -> PG: commit transaction
+      P --> C: PantryItem[]
+      C --> FE: 200 OK + items[]
+    end
+  end
+end
+
+note over NJ
+  **Neo4j Strict Mode**
+  • No fake fallback data
+  • Raises RuntimeError if not connected
+  • Raises ValueError if ingredient missing
+  • Batch queries for efficiency
+  • Ensures data integrity
+end note
+
+note over P
+  **Multi-User Support**
+  • All operations scoped by user_id
+  • User validation before pantry ops
+  • Isolated pantry per user
+end note
+
+note over PG
+  **Batch-Level Tracking**
+  • Unique: (user_id, ingredient_id, unit, best_before)
+  • Same ingredient with different expiry dates → separate rows
+  • Enables FIFO/FEFO inventory management
+  • Example: 2L milk expires 2025-11-05 + 2L milk expires 2025-11-12
+    → stored as 2 separate pantry items
+end note
+
+== Update Quantity (Daily Use) ==
+User -> FE: Consume/adjust pantry item {quantity_change, reason}
+FE -> C: PATCH /pantry/{pantry_item_id}
+C -> C: validate payload (Pydantic)
+alt invalid
+  C --> FE: 422 Unprocessable Entity
+else valid
+  C -> P: update_quantity(pantry_item_id, quantity_change, reason)
+  
+  P -> PG: SELECT pantry_item WHERE pantry_item_id = :id
+  alt item not found
+    PG --> P: no rows
+    P --> C: NotFoundError
+    C --> FE: 404 Pantry Item Not Found
+  else item found
+    PG --> P: pantry_item row
+    P -> P: calculate new_qty = current_qty + quantity_change
+    
+    alt new_qty < 0
+      P --> C: ServiceValidationError("Insufficient stock")
+      C --> FE: 400 Bad Request (insufficient quantity)
+    else new_qty == 0
+      P -> PG: DELETE pantry_item WHERE pantry_item_id = :id
+      note right: Auto-remove when quantity reaches exactly 0
+      PG --> P: deleted
+      P --> C: None (item deleted)
+      C --> FE: 200 OK {status: "deleted", reason: "quantity_reached_zero"}
+    else new_qty > 0
+      P -> PG: UPDATE pantry_item SET quantity = :new_qty
+      PG --> P: updated row
+      P --> C: PantryItem (updated)
+      C --> FE: 200 OK + updated item
+    end
+  end
+end
+
+== Get Expiring Soon (Waste Prevention) ==
+User -> FE: Check what's expiring soon
+FE -> C: GET /pantry/expiring-soon?user_id={id}&days={3}
+C -> P: get_expiring_soon(user_id, days_threshold)
+
+P -> PG: SELECT * FROM pantry_item\nWHERE user_id = :id\nAND best_before IS NOT NULL\nAND best_before <= (today + :days)\nORDER BY best_before ASC
+note right: FIFO ordering - oldest first\nOnly items with expiry dates\nHelps prioritize cooking decisions
+
+PG --> P: pantry_items[] (ordered by expiry)
+P --> C: List[PantryItem]
+C --> FE: expiring items (FIFO ordered)
 @enduml
 
 
@@ -290,25 +441,115 @@ participant "Frontend" as FE
 participant "Controller" as C
 participant "WasteService" as W
 database "PostgreSQL" as PG
+database "Neo4j" as NJ
 
 == Log waste ==
-User -> FE: Log waste {ingredient, qty, reason}
-FE -> C: POST /waste
-C -> W: validateNormalize(ingredient, qty, unit)
-W --> C: ok
-C -> PG: insert waste_log
-PG --> C: ok
-C --> FE: saved
+User -> FE: Log waste {ingredient_id, qty, unit, reason, pantry_item_id?, auto_remove?}
+FE -> C: POST /waste?user_id={id}
+C -> C: validate schema (Pydantic)
+alt invalid
+  C --> FE: 400 Bad Request
+else valid
+  C -> W: validate_waste_data(ingredient_id, qty, unit)
+  
+  W -> W: check quantity > 0
+  W -> W: normalize unit (lowercase, trim)
+  W -> NJ: get_ingredient_meta(ingredient_id)
+  note right of NJ: STRICT: No fake fallbacks!\nRaises exception if not found
+  
+  alt Neo4j not connected
+    NJ --> W: RuntimeError("Neo4j driver not initialized")
+    W --> C: ServiceValidationError("Invalid ingredient: Neo4j not connected")
+    C --> FE: 400 Bad Request (Neo4j unavailable)
+  else ingredient not found
+    NJ --> W: ValueError("Ingredient not found in Neo4j")
+    W --> C: ServiceValidationError("Invalid ingredient: not found")
+    C --> FE: 400 Bad Request (invalid ingredient)
+  else ingredient found
+    NJ --> W: {id, name, category, perishability, proc_id}
+    W --> C: validated_data {ingredient_id, qty, unit, category, name}
+    
+    C -> W: log_waste(user_id, validated_data)
+    W -> PG: verify user exists
+    alt user not found
+      PG --> W: no rows
+      W --> C: NotFoundError
+      C --> FE: 404 User Not Found
+    else user exists
+      PG --> W: user row
+      
+      alt pantry_item_id provided AND auto_remove_from_pantry = true
+        participant "PantryService" as P
+        W -> P: update_quantity(pantry_item_id, -quantity, reason="waste")
+        note right: Pantry Integration:\nDecrement wasted quantity from pantry
+        
+        alt pantry item not found
+          P --> W: NotFoundError (pantry item missing)
+          note right: Warning logged, continue with waste log
+        else insufficient stock
+          P --> W: ServiceValidationError (qty < 0)
+          note right: Warning logged, continue with waste log\n(User may have already consumed it)
+        else update successful
+          P --> W: PantryItem (updated or deleted if qty=0)
+          note right: Pantry synced with waste log!
+        end
+      end
+      
+      W -> PG: INSERT waste_log (user_id, ingredient_id, qty, unit, reason, occurred_at)
+      PG --> W: waste_log row
+      W --> C: WasteLogResponse
+      C --> FE: 201 Created + waste_log
+    end
+  end
+end
 
-== Insights ==
+== Insights Dashboard ==
 User -> FE: Open Waste Insights
-FE -> C: GET /waste/insights?horizon=30d
-C -> W: buildInsights(userId, horizon)
+FE -> C: GET /waste/insights?user_id={id}&horizon=30d
+C -> W: build_insights(user_id, horizon)
 
-W -> PG: get waste_log aggregate
-PG --> W: totals by ingredient/category, trend
-W --> C: charts/metrics
-C --> FE: insights view
+W -> PG: verify user exists
+alt user not found
+  PG --> W: no rows
+  W --> C: NotFoundError
+  C --> FE: 404 User Not Found
+else user exists
+  PG --> W: user row
+  
+  W -> PG: SELECT * FROM waste_log\nWHERE user_id = :id AND occurred_at >= :start_date
+  PG --> W: waste_logs[]
+  
+  alt no waste logs
+    W --> C: empty insights (all zeros)
+    C --> FE: insights view (no data message)
+  else has waste logs
+    W -> W: extract unique ingredient_ids from logs
+    W -> NJ: get_ingredients_batch(ingredient_ids[])
+    
+    alt Neo4j not connected
+      NJ --> W: RuntimeError("Neo4j driver not initialized")
+      W --> C: ServiceValidationError("Cannot build insights: Neo4j unavailable")
+      C --> FE: 400 Bad Request
+    else any ingredient not found
+      NJ --> W: ValueError("Ingredients not found: id1, id2, ...")
+      W --> C: ServiceValidationError("Cannot build insights: missing ingredients")
+      C --> FE: 400 Bad Request
+    else all ingredients found
+      NJ --> W: ingredient_metadata_map {id: {name, category, perishability}}
+      
+      W -> W: aggregate totals (count, quantity)
+      W -> W: aggregate by ingredient (with name from Neo4j)
+      W -> W: aggregate by category (from Neo4j metadata)
+      W -> W: compute trends by week
+      W -> W: aggregate by reason (top 5)
+      W -> W: calculate percentages
+      
+      W --> C: WasteInsightsResponse {\n  total_count, total_qty,\n  most_wasted_ingredients[],\n  waste_by_category[],\n  waste_trends[],\n  common_reasons[]\n}
+      C --> FE: insights view (charts/metrics)
+    end
+  end
+end
+
 @enduml
 
 

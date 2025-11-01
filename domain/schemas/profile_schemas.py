@@ -3,7 +3,7 @@ from typing import Optional, List
 from datetime import datetime, date
 from uuid import UUID
 from decimal import Decimal
-from core.database.models import GoalType, ActivityLevel, PreferenceStrength
+from domain.enums import GoalType, ActivityLevel, PreferenceStrength
 
 
 class UserCreate(BaseModel):
@@ -42,6 +42,20 @@ class PantryItemResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class PantryItemQuantityUpdate(BaseModel):
+    """Request to update quantity of a pantry item (add/consume/adjust)"""
+
+    quantity_change: Decimal = Field(
+        ...,
+        description="Amount to add (positive) or remove (negative). E.g., -0.5 to consume 500ml",
+    )
+    reason: Optional[str] = Field(
+        None,
+        description="Reason for change: 'cooking', 'waste', 'found_more', 'spoiled', etc.",
+        max_length=100,
+    )
 
 
 class AllergyCreate(BaseModel):
@@ -99,6 +113,7 @@ class DietaryProfileResponse(BaseModel):
 
 class ProfileUpdateRequest(BaseModel):
     """Complete profile update request"""
+
     # If email is provided for a PUT on a non-existing user, the user will be created.
     email: Optional[EmailStr] = None
 
