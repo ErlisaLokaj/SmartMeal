@@ -20,6 +20,7 @@ from core.schemas.profile_schemas import (
 from core.services.recipe_service import get_recipe_by_id, search_recipes
 from core.services.recommendation_service import RecommendationService
 from core.schemas.recipe_schemas import RecipeRecommendation, RecommendationRequest
+from core.services.ingredient_service import IngredientService
 
 router = APIRouter(prefix="", tags=["SmartMeal"])
 
@@ -371,3 +372,41 @@ def api_get_recipe(recipe_id: str) -> Dict[str, Any]:
     if not doc:
         return {}
     return doc
+
+
+@router.post("/admin/ingredients/import-from-mongo")
+def import_ingredients_from_mongo(db: Session = Depends(get_db)):
+    """
+    ADMIN: Import all ingredients from MongoDB ingredient_master to PostgreSQL.
+
+    This is a one-time migration operation. Safe to run multiple times.
+
+    Returns statistics about the import.
+    """
+    stats = IngredientService.bulk_import_from_mongo(db)
+
+    return {
+        "status": "complete",
+        "created": stats.get("created", 0),
+        "existing": stats.get("existing", 0),
+        "errors": stats.get("errors", 0)
+    }
+
+
+@router.post("/admin/ingredients/sync-recipes")
+def sync_recipes_to_master(db: Session = Depends(get_db)):
+    """
+    ADMIN: Update all MongoDB recipes to use master ingredient UUIDs.
+
+    This fixes the inconsistent UUID problem where the same ingredient
+    (e.g., "butter") had different UUIDs in different recipes.
+
+    Safe to run multiple times.
+    """
+    stats = IngredientService.sync_all_recipes_to_master(db)
+
+    return {
+        "status": "complete",
+        "updated_recipes": stats.get("updated_recipes", 0),
+        "updated_ingredients": stats.get("updated_ingredients", 0)
+    }
