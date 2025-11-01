@@ -2,6 +2,8 @@ from fastapi import FastAPI
 import logging
 import uvicorn
 from api.routes import router
+from api.shopping_routes import router as shopping_router
+from api.profile_routes import router as profile_router
 from core.database.models import init_database
 from adapters import graph_adapter
 from core.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
@@ -10,6 +12,8 @@ import anyio
 import inspect
 from typing import Optional
 import os
+from adapters import mongo_adapter
+from core.config import MONGO_URI, MONGO_DB
 
 # Setup logging
 logging.basicConfig(
@@ -66,6 +70,10 @@ async def lifespan(app: FastAPI):
             "Failed to initialize Neo4j adapter; continuing with stub/fallback"
         )
     try:
+        mongo_adapter.connect(MONGO_URI, MONGO_DB)
+    except Exception:
+        _logger.exception("Failed to initialize MongoDB adapter")
+    try:
         yield
     finally:
         # close Neo4j on shutdown
@@ -73,6 +81,12 @@ async def lifespan(app: FastAPI):
             graph_adapter.close()
         except Exception:
             _logger.exception("Error closing Neo4j adapter during shutdown")
+        # close MongoDB on shutdown
+        try:
+            mongo_adapter.close()
+        except Exception:
+                _logger.exception("Error closing MongoDB adapter during shutdown")
+
 
 
 # Create FastAPI app with the lifespan manager
@@ -85,6 +99,8 @@ app = FastAPI(
 
 # Include routers
 app.include_router(router)
+app.include_router(shopping_router)
+app.include_router(profile_router)
 
 
 @app.get("/health")

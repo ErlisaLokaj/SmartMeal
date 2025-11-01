@@ -1,6 +1,21 @@
+"""Neo4j adapter for ingredient metadata and substitution lookups.
+
+This module provides a small wrapper around the neo4j driver. If the
+`neo4j` package is not installed, the module falls back to a lightweight
+in-memory stub so the application (and tests) can run without a running
+Neo4j instance. For production, install `neo4j` and set NEO4J_* env vars.
+"""
+
 from typing import Optional, Dict, Any
 import logging
 from neo4j import GraphDatabase
+import os
+
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4jpassword")
+
+_driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
 logger = logging.getLogger("smartmeal.graph")
 
@@ -15,7 +30,7 @@ def connect(uri: str, user: str, password: str):
     """
     global _driver
     try:
-        
+        from neo4j import GraphDatabase
 
         _driver = GraphDatabase.driver(uri, auth=(user, password))
         logger.info("Connected to Neo4j %s", uri)
@@ -52,12 +67,10 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
     if _driver is not None:
         try:
             with _driver.session() as session:
-                # Search by common identifier properties: id (canonical), proc_id (from processed data), or name
-                q = (
-                    "MATCH (i:Ingredient) WHERE i.id = $id OR i.proc_id = $id OR i.name = $id "
-                    "RETURN i.category AS category, i.perishability AS perishability, i.shelf_life_days AS shelf_life_days"
+                result = session.run(
+                    "MATCH (i:Ingredient {id: $id}) RETURN i.category AS category, i.perishability AS perishability, i.shelf_life_days AS shelf_life_days",
+                    id=str(ingredient_id),
                 )
-                result = session.run(q, id=str(ingredient_id))
                 rec = result.single()
                 if rec:
                     return {
@@ -65,7 +78,9 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
                         "perishability": rec["perishability"] or "non_perishable",
                         "defaults": {
                             "shelf_life_days": (
-                                int(rec["shelf_life_days"]) if rec["shelf_life_days"] is not None else None
+                                int(rec["shelf_life_days"])
+                                if rec["shelf_life_days"] is not None
+                                else None
                             )
                         },
                     }
@@ -102,8 +117,12 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
     }
 
 
-def suggest_substitutes(ingredient_id: str, limit: int = 5):
-    """Return a short list of substitute ingredient ids/names for a given ingredient.
+def suggest_substitutes(ingredient_name: str, limit: int = 5):
+    """Return a short list of substitute ingredient names for a given ingredient.
+
+    Args:
+        ingredient_name: Name of the ingredient (e.g., "chicken", "milk")
+        limit: Maximum number of substitutes to return
 
     If Neo4j is available this will query substitute relationships; otherwise
     a small hard-coded map is used.
@@ -112,21 +131,46 @@ def suggest_substitutes(ingredient_id: str, limit: int = 5):
         try:
             with _driver.session() as session:
                 q = (
-                    "MATCH (i:Ingredient {id: $id})-[:SUBSTITUTE]->(s:Ingredient) "
-                    "RETURN s.id AS id LIMIT $limit"
+                    "MATCH (i:Ingredient {name: $name})-[:SUBSTITUTED_BY]->(s:Ingredient) "
+                    "RETURN s.name AS name LIMIT $limit"
                 )
-                rows = session.run(q, id=str(ingredient_id), limit=limit)
-                return [r["id"] for r in rows]
+                rows = session.run(q, name=ingredient_name, limit=limit)
+                return [r["name"] for r in rows]
         except Exception:
-            logger.exception("Error querying substitutes for %s", ingredient_id)
+            logger.exception("Error querying substitutes for %s", ingredient_name)
 
-    # Stub map
+    # Stub map (unchanged)
     substitutes = {
         "chicken": ["tofu", "tempeh"],
         "rice": ["quinoa"],
         "milk": ["soy milk", "almond milk"],
     }
     for k, v in substitutes.items():
-        if k in str(ingredient_id).lower():
+        if k in ingredient_name.lower():
             return v[:limit]
     return []
+
+def get_substitutes_for_recipe(recipe_id: str):
+    """
+    Returns a list of ingredient substitutions for a specific recipe.
+    """
+    query = """
+    MATCH (r:Recipe {id: $id})-[:CONTAINS]->(i:Ingredient)
+    OPTIONAL MATCH (i)-[:SUBSTITUTED_BY]->(s:Ingredient)
+    RETURN DISTINCT i.name AS ingredient, collect(DISTINCT s.name) AS substitutes
+    """
+    with _driver.session() as session:
+        result = session.run(query, {"id": recipe_id})
+        return {r["ingredient"]: r["substitutes"] for r in result if r["substitutes"]}
+
+
+def get_disallowed_ingredient_ids(allergy_names):
+    """Returns a list of ingredient IDs associated with allergies."""
+    query = """
+    MATCH (a:Allergy)-[:TRIGGERS]->(i:Ingredient)
+    WHERE a.name IN $allergies
+    RETURN i.ingredient_id AS id
+    """
+    with _driver.session() as session:
+        result = session.run(query, allergies=allergy_names)
+        return [r["id"] for r in result if r.get("id")]

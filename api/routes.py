@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 import json
 import logging
+from fastapi import APIRouter, Query
+from typing import Optional, List, Dict, Any
 from uuid import UUID
-from typing import List, Optional
+
 
 from adapters import graph_adapter
 from core.database.models import get_db, AppUser
 from core.schemas.profile_schemas import *
+from core.services import recipe_service
 from core.services.profile_service import ProfileService
 from core.services.pantry_service import PantryService
 from core.schemas.profile_schemas import (
@@ -16,6 +19,10 @@ from core.schemas.profile_schemas import (
     PantryItemCreateRequest,
 )
 from core.exceptions import ServiceValidationError, NotFoundError
+from core.services.recipe_service import get_recipe_by_id, search_recipes
+from core.services.recommendation_service import RecommendationService
+from core.schemas.recipe_schemas import RecipeRecommendation, RecommendationRequest
+from core.services.ingredient_service import IngredientService
 
 router = APIRouter(prefix="", tags=["SmartMeal"])
 
@@ -137,7 +144,7 @@ def health_check():
 def neo4j_seed_status():
     """Return a simple count of Ingredient nodes in Neo4j. Uses graph_adapter when available."""
     try:
-        
+
 
         # Attempt to query a fake id of 'count' — the adapter will use driver if configured
         # Use the internal driver if present to run a count query for stronger verification.
@@ -360,3 +367,110 @@ def delete_allergy(user_id: UUID, ingredient_id: UUID, db: Session = Depends(get
             detail=f"Allergy {ingredient_id} not found for user {user_id}",
         )
     return {"status": "ok", "removed": str(ingredient_id)}
+
+
+@router.get("/recommendations/{user_id}", response_model=List[RecipeRecommendation])
+def get_recommendations(
+        user_id: UUID,
+        limit: int = 10,
+        db: Session = Depends(get_db)
+):
+    """
+    Get personalized recipe recommendations for a user.
+
+    Usage:
+      GET /recommendations/{user_id}           (returns 10 by default)
+      GET /recommendations/{user_id}?limit=5   (returns 5)
+    """
+    try:
+        recipes = RecommendationService.recommend(
+            db=db,
+            user_id=user_id,
+            limit=limit,
+            tag_filters=None
+        )
+
+        return [
+            RecipeRecommendation.from_recipe(
+                recipe,
+                score=recipe.get("match_score", 0),
+                pantry_matches=recipe.get("pantry_match_count", 0)
+            )
+            for recipe in recipes
+        ]
+    except Exception as e:
+        logger.error(f"Error generating recommendations: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error generating recommendations"
+        )
+
+
+@router.get("/recipes")
+def search_recipes_endpoint(
+        q: Optional[str] = Query(default=None),
+        cuisine: Optional[str] = Query(default=None),
+        include: Optional[str] = Query(default=None),
+        exclude: Optional[str] = Query(default=None),
+        user_id: Optional[str] = Query(default=None),
+        limit: int = Query(default=20, ge=1, le=100),
+        offset: int = Query(default=0, ge=0),
+) -> List[Dict[str, Any]]:
+    try:
+        return recipe_service.search_recipes(
+            user_id=user_id,
+            q=q,
+            cuisine=cuisine,
+            include=include,
+            exclude=exclude,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as e:
+        logger.exception("recipes search failed")
+        raise HTTPException(status_code=500, detail="search_failed")
+
+@router.get("/recipes/{recipe_id}")
+def api_get_recipe(recipe_id: str) -> Dict[str, Any]:
+    doc = get_recipe_by_id(recipe_id)
+    if not doc:
+        return {}
+    return doc
+
+
+@router.post("/admin/ingredients/import-from-mongo")
+def import_ingredients_from_mongo(db: Session = Depends(get_db)):
+    """
+    ADMIN: Import all ingredients from MongoDB ingredient_master to PostgreSQL.
+
+    This is a one-time migration operation. Safe to run multiple times.
+
+    Returns statistics about the import.
+    """
+    stats = IngredientService.bulk_import_from_mongo(db)
+
+    return {
+        "status": "complete",
+        "created": stats.get("created", 0),
+        "existing": stats.get("existing", 0),
+        "errors": stats.get("errors", 0)
+    }
+
+
+@router.post("/admin/ingredients/sync-recipes")
+def sync_recipes_to_master(db: Session = Depends(get_db)):
+    """
+    ADMIN: Update all MongoDB recipes to use master ingredient UUIDs.
+
+    This fixes the inconsistent UUID problem where the same ingredient
+    (e.g., "butter") had different UUIDs in different recipes.
+
+    Safe to run multiple times.
+    """
+    stats = IngredientService.sync_all_recipes_to_master(db)
+
+    return {
+        "status": "complete",
+        "updated_recipes": stats.get("updated_recipes", 0),
+        "updated_ingredients": stats.get("updated_ingredients", 0)
+    }

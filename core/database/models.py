@@ -52,6 +52,29 @@ class PreferenceStrength(str, enum.Enum):
     LOVE = "love"
 
 
+class Ingredient(Base):
+    """
+    Master ingredient table - single source of truth.
+
+    All recipes, pantry items, and allergies reference ingredients by ingredient_id.
+    """
+    __tablename__ = "ingredient"
+
+    ingredient_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(Text, nullable=False, unique=True)
+    category = Column(Text)
+    is_allergen = Column(Boolean, default=False)
+
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(
+        TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint('name', name='uq_ingredient_name'),
+    )
+
+
 # Models
 class AppUser(Base):
     __tablename__ = "app_user"
@@ -268,6 +291,7 @@ class ShoppingListItem(Base):
         nullable=False,
     )
     ingredient_id = Column(UUID(as_uuid=True), nullable=False)
+    ingredient_name = Column(Text)
     needed_qty = Column(Numeric)
     unit = Column(Text)
     checked = Column(Boolean, default=False)

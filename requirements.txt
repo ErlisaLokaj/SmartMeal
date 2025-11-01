@@ -10,3 +10,4 @@ email-validator
 ijson
 pytest
 httpx
+pandas
