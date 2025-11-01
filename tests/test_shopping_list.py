@@ -99,8 +99,6 @@ def test_shopping_list_creation_flow():
     """
     print(EXAMPLE_MEAL_PLAN_FLOW)
 
-    # This would be a full integration test with real database
-    # For now, showing the expected flow
 
     user_id = uuid4()
     plan_id = uuid4()
@@ -194,7 +192,7 @@ def test_shopping_list_creation_flow():
     return expected_shopping_list
 
 
-# API Usage Examples
+
 API_EXAMPLES = """
 API Usage Examples for Shopping List
 =================================================
