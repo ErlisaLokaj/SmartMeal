@@ -17,7 +17,7 @@ class ShoppingListItemResponse(BaseModel):
     list_item_id: UUID
     list_id: UUID
     ingredient_id: UUID
-    ingredient_name: Optional[str] = None  # Enriched from MongoDB
+    ingredient_name: Optional[str]
     needed_qty: float
     unit: Optional[str]
     checked: bool = False

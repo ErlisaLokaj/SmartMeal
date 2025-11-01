@@ -179,7 +179,7 @@ def _to_response(shopping_list) -> ShoppingListResponse:
             list_item_id=item.list_item_id,
             list_id=item.list_id,
             ingredient_id=item.ingredient_id,
-            ingredient_name=None,  # Could enrich from Neo4j/MongoDB if needed
+            ingredient_name=item.ingredient_name,
             needed_qty=float(item.needed_qty),
             unit=item.unit,
             checked=item.checked,

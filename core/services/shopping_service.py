@@ -138,6 +138,7 @@ class ShoppingService:
             list_item = ShoppingListItem(
                 list_id=shopping_list.list_id,
                 ingredient_id=UUID(item_data["ingredient_id"]),
+                ingredient_name=item_data.get("ingredient_name"),
                 needed_qty=item_data["needed_qty"],
                 unit=item_data["unit"],
                 checked=False,
