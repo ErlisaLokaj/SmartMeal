@@ -1,11 +1,3 @@
-"""Neo4j adapter for ingredient metadata and substitution lookups.
-
-This module provides a small wrapper around the neo4j driver. If the
-`neo4j` package is not installed, the module falls back to a lightweight
-in-memory stub so the application (and tests) can run without a running
-Neo4j instance. For production, install `neo4j` and set NEO4J_* env vars.
-"""
-
 from typing import Optional, Dict, Any
 import logging
 from neo4j import GraphDatabase
@@ -23,15 +15,8 @@ _driver = None
 
 
 def connect(uri: str, user: str, password: str):
-    """Initialize a neo4j driver.
-
-    If the driver package is unavailable, this becomes a no-op and the
-    other functions will use a fallback behavior.
-    """
     global _driver
     try:
-        from neo4j import GraphDatabase
-
         _driver = GraphDatabase.driver(uri, auth=(user, password))
         logger.info("Connected to Neo4j %s", uri)
     except Exception as exc:  # pragma: no cover - driver optional in tests
@@ -120,10 +105,6 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
 def suggest_substitutes(ingredient_name: str, limit: int = 5):
     """Return a short list of substitute ingredient names for a given ingredient.
 
-    Args:
-        ingredient_name: Name of the ingredient (e.g., "chicken", "milk")
-        limit: Maximum number of substitutes to return
-
     If Neo4j is available this will query substitute relationships; otherwise
     a small hard-coded map is used.
     """
@@ -139,7 +120,7 @@ def suggest_substitutes(ingredient_name: str, limit: int = 5):
         except Exception:
             logger.exception("Error querying substitutes for %s", ingredient_name)
 
-    # Stub map (unchanged)
+    # Stub map
     substitutes = {
         "chicken": ["tofu", "tempeh"],
         "rice": ["quinoa"],
