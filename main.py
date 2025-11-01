@@ -2,6 +2,8 @@ from fastapi import FastAPI
 import logging
 import uvicorn
 from api.routes import router
+from api.shopping_routes import router as shopping_router
+from api.profile_routes import router as profile_router
 from core.database.models import init_database
 from adapters import graph_adapter
 from core.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
@@ -97,6 +99,8 @@ app = FastAPI(
 
 # Include routers
 app.include_router(router)
+app.include_router(shopping_router)
+app.include_router(profile_router)
 
 
 @app.get("/health")
