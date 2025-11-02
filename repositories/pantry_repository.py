@@ -44,6 +44,31 @@ class PantryRepository(BaseRepository[PantryItem]):
             query = query.filter(PantryItem.unit == unit)
         return query.first()
 
+    def get_batch(
+        self,
+        user_id: UUID,
+        ingredient_id: UUID,
+        unit: str,
+        best_before: date = None,
+        with_lock: bool = False,
+    ) -> Optional[PantryItem]:
+        """Get pantry item matching user, ingredient, unit, and best_before (batch)"""
+        query = self.db.query(PantryItem).filter(
+            and_(
+                PantryItem.user_id == user_id,
+                PantryItem.ingredient_id == ingredient_id,
+                PantryItem.unit == unit,
+                PantryItem.best_before == best_before,
+            )
+        )
+        if with_lock:
+            try:
+                query = query.with_for_update()
+            except Exception:
+                # Some backends don't support with_for_update
+                pass
+        return query.first()
+
     def get_expiring_items(self, user_id: UUID, within_days: int) -> List[PantryItem]:
         """Get pantry items expiring within specified days"""
         from datetime import datetime, timedelta
@@ -105,6 +130,19 @@ class PantryRepository(BaseRepository[PantryItem]):
             self.db.commit()
             return True
         return False
+
+    def update_quantity(
+        self, pantry_item_id: UUID, new_quantity, commit: bool = True
+    ) -> Optional[PantryItem]:
+        """Update quantity of a pantry item"""
+        item = self.get_by_id(pantry_item_id)
+        if item:
+            item.quantity = new_quantity
+            if commit:
+                self.db.commit()
+                self.db.refresh(item)
+            return item
+        return None
 
     def delete_by_user_id(self, user_id: UUID) -> int:
         """Delete all pantry items for a user"""

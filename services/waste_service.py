@@ -15,7 +15,7 @@ from domain.schemas.waste_schemas import (
     WasteByCategory,
     WasteTrend,
 )
-from adapters import graph_adapter
+from repositories import UserRepository, WasteRepository, IngredientRepository
 from core.exceptions import NotFoundError, ServiceValidationError
 
 logger = logging.getLogger("smartmeal.waste")
@@ -59,8 +59,9 @@ class WasteService:
             # Fetch ingredient metadata from Neo4j to:
             # 1. Validate ingredient exists
             # 2. Enrich waste log with name and category for better insights
+            ingredient_repo = IngredientRepository()
             try:
-                meta = graph_adapter.get_ingredient_meta(str(ingredient_id))
+                meta = ingredient_repo.get_metadata(str(ingredient_id))
                 ingredient_name = meta.get("name", "Unknown")
                 category = meta.get("category", "unknown")
                 logger.debug(
@@ -126,8 +127,11 @@ class WasteService:
         from services.pantry_service import PantryService
         from decimal import Decimal
 
+        # Initialize repositories
+        user_repo = UserRepository(db)
+
         # Verify user exists
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user = user_repo.get_by_id(user_id)
         if not user:
             logger.warning(f"log_waste failed: user {user_id} not found")
             raise NotFoundError(f"User {user_id} not found")
@@ -172,18 +176,15 @@ class WasteService:
                 )
                 # Don't fail - user might be logging waste of item already consumed
 
-        # Create waste log entry
-        waste_log = WasteLog(
+        # Create waste log entry using repository
+        waste_repo = WasteRepository(db)
+        waste_log = waste_repo.create_waste_log(
             user_id=user_id,
             ingredient_id=validated["ingredient_id"],
             quantity=validated["quantity"],
             unit=validated["unit"],
             reason=waste_data.reason,
         )
-
-        db.add(waste_log)
-        db.commit()
-        db.refresh(waste_log)
 
         logger.info(
             f"waste_logged user_id={user_id} waste_id={waste_log.waste_id} "
@@ -215,8 +216,12 @@ class WasteService:
         Raises:
             NotFoundError: If user not found
         """
+        # Initialize repositories
+        user_repo = UserRepository(db)
+        waste_repo = WasteRepository(db)
+
         # Verify user exists
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user = user_repo.get_by_id(user_id)
         if not user:
             logger.warning(f"build_insights failed: user {user_id} not found")
             raise NotFoundError(f"User {user_id} not found")
@@ -231,11 +236,7 @@ class WasteService:
         )
 
         # Get all waste logs within the horizon
-        waste_logs = (
-            db.query(WasteLog)
-            .filter(WasteLog.user_id == user_id, WasteLog.occurred_at >= start_date)
-            .all()
-        )
+        waste_logs = waste_repo.get_by_user_in_period(user_id, start_date, end_date)
 
         if not waste_logs:
             logger.info(
@@ -265,8 +266,9 @@ class WasteService:
             f"Fetching metadata for {len(unique_ingredient_ids)} unique ingredients"
         )
 
+        ingredient_repo = IngredientRepository()
         try:
-            ingredient_metadata_map = graph_adapter.get_ingredients_batch(
+            ingredient_metadata_map = ingredient_repo.get_ingredients_batch(
                 unique_ingredient_ids
             )
             logger.info(

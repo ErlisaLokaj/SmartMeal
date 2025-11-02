@@ -1,13 +1,68 @@
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
 .venv/
 venv/
-*.pyc
-*.pyo
-*.pyd
-.git
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files
 .env
+.env.*
+!.env.example
+
+# Databases (local development)
 *.sqlite3
 *.db
-node_modules/
+smartmeal.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Build artifacts
 dist/
 build/
+*.egg-info/
+node_modules/
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Diagrams and design files
+diagram/
+
+# Code context and analysis
+code_context.txt
+get_code_context.sh
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+

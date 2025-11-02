@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 
 from domain.models import PantryItem, AppUser
 from domain.schemas.profile_schemas import PantryItemCreate
-from adapters import graph_adapter
+from repositories import IngredientRepository, PantryRepository, UserRepository
 from datetime import datetime, timedelta, date
 from core.exceptions import NotFoundError, ServiceValidationError
 
@@ -32,8 +32,9 @@ class PantryService:
         Raises:
             ServiceValidationError: If Neo4j is unavailable or ingredient not found
         """
+        ingredient_repo = IngredientRepository()
         try:
-            meta = graph_adapter.get_ingredient_meta(str(ingredient_id))
+            meta = ingredient_repo.get_metadata(str(ingredient_id))
             return meta
         except RuntimeError as e:
             # Neo4j driver not initialized
@@ -68,10 +69,11 @@ class PantryService:
         if not ingredient_ids:
             return {}
 
+        ingredient_repo = IngredientRepository()
         try:
             # Convert UUIDs to strings for graph adapter
             id_strings = [str(iid) for iid in ingredient_ids]
-            meta_map = graph_adapter.get_ingredients_batch(id_strings)
+            meta_map = ingredient_repo.get_ingredients_batch(id_strings)
             return meta_map
         except RuntimeError as e:
             # Neo4j driver not initialized
@@ -86,7 +88,8 @@ class PantryService:
 
     @staticmethod
     def get_pantry(db: Session, user_id: uuid.UUID) -> List[PantryItem]:
-        return db.query(PantryItem).filter(PantryItem.user_id == user_id).all()
+        pantry_repo = PantryRepository(db)
+        return pantry_repo.get_by_user_id(user_id)
 
     @staticmethod
     def set_pantry(db: Session, user_id: uuid.UUID, items: List[PantryItemCreate]):
@@ -117,8 +120,12 @@ class PantryService:
             NotFoundError: If user not found
             ServiceValidationError: If any ingredient validation fails
         """
+        # Initialize repositories
+        user_repo = UserRepository(db)
+        pantry_repo = PantryRepository(db)
+
         # Verify user exists
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user = user_repo.get_by_id(user_id)
         if not user:
             raise NotFoundError(f"User not found: {user_id}")
 
@@ -134,49 +141,51 @@ class PantryService:
 
         # Replace all items in a transaction (atomic delete+insert)
         try:
-            with db.begin():
-                db.query(PantryItem).filter(PantryItem.user_id == user_id).delete()
+            # Delete all existing items for user
+            existing_items = pantry_repo.get_by_user_id(user_id)
+            for item in existing_items:
+                db.delete(item)
 
-                for it in items:
-                    # Get metadata for this ingredient (already validated above)
-                    meta = meta_map.get(str(it.ingredient_id), {})
+            for it in items:
+                # Get metadata for this ingredient (already validated above)
+                meta = meta_map.get(str(it.ingredient_id), {})
 
-                    # Estimate expiry from Neo4j metadata if not provided
-                    bb = it.best_before
-                    if bb is None:
-                        shelf_days = meta.get("defaults", {}).get("shelf_life_days")
-                        if shelf_days:
-                            bb = datetime.utcnow().date() + timedelta(
-                                days=int(shelf_days)
-                            )
-                            logger.debug(
-                                f"Estimated best_before for {it.ingredient_id}: {bb} "
-                                f"(+{shelf_days} days)"
-                            )
-                        else:
-                            logger.debug(
-                                f"No shelf_life_days for {it.ingredient_id}; "
-                                "best_before will be None"
-                            )
-
-                    try:
-                        qty = Decimal(str(it.quantity))
-                    except (InvalidOperation, TypeError):
-                        qty = Decimal("0")
-
-                    db.add(
-                        PantryItem(
-                            user_id=user_id,
-                            ingredient_id=it.ingredient_id,
-                            quantity=qty,
-                            unit=it.unit,
-                            best_before=bb,
-                            source=None,
+                # Estimate expiry from Neo4j metadata if not provided
+                bb = it.best_before
+                if bb is None:
+                    shelf_days = meta.get("defaults", {}).get("shelf_life_days")
+                    if shelf_days:
+                        bb = datetime.utcnow().date() + timedelta(days=int(shelf_days))
+                        logger.debug(
+                            f"Estimated best_before for {it.ingredient_id}: {bb} "
+                            f"(+{shelf_days} days)"
                         )
-                    )
+                    else:
+                        logger.debug(
+                            f"No shelf_life_days for {it.ingredient_id}; "
+                            "best_before will be None"
+                        )
 
-            return db.query(PantryItem).filter(PantryItem.user_id == user_id).all()
+                try:
+                    qty = Decimal(str(it.quantity))
+                except (InvalidOperation, TypeError):
+                    qty = Decimal("0")
+
+                db.add(
+                    PantryItem(
+                        user_id=user_id,
+                        ingredient_id=it.ingredient_id,
+                        quantity=qty,
+                        unit=it.unit,
+                        best_before=bb,
+                        source=None,
+                    )
+                )
+
+            db.commit()
+            return pantry_repo.get_by_user_id(user_id)
         except Exception:
+            db.rollback()
             logger.exception("Error setting pantry for user %s", user_id)
             raise
 
@@ -203,13 +212,18 @@ class PantryService:
             NotFoundError: If user not found
             ServiceValidationError: If ingredient validation fails
         """
+        # Initialize repositories
+        user_repo = UserRepository(db)
+
         # Verify user exists
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user = user_repo.get_by_id(user_id)
         if not user:
             raise NotFoundError(f"User not found: {user_id}")
 
         # Validate ingredient exists in Neo4j and get metadata
         meta = PantryService.validate_ingredient_data(item.ingredient_id)
+        if meta is None:
+            raise ServiceValidationError(f"Ingredient not found in Neo4j: {item.ingredient_id}")
 
         # Estimate expiry from Neo4j metadata if not provided
         bb = item.best_before
@@ -230,92 +244,70 @@ class PantryService:
         # Perform upsert in a transaction with batch-level granularity
         # Each unique (ingredient, unit, best_before) combination is tracked separately
         try:
-            with db.begin():
+            pantry_repo = PantryRepository(db)
+
+            # Match on best_before to track separate batches with different expiry dates
+            existing = pantry_repo.get_batch(
+                user_id=user_id,
+                ingredient_id=item.ingredient_id,
+                unit=item.unit,
+                best_before=bb,
+                with_lock=True,
+            )
+
+            if existing:
+                # Same batch (same expiry date) - increment quantity
                 try:
-                    # Match on best_before to track separate batches with different expiry dates
-                    existing = (
-                        db.query(PantryItem)
-                        .filter(
-                            PantryItem.user_id == user_id,
-                            PantryItem.ingredient_id == item.ingredient_id,
-                            PantryItem.unit == item.unit,
-                            PantryItem.best_before
-                            == bb,  # Key change: match on expiry date
-                        )
-                        .with_for_update()
-                        .first()
-                    )
+                    existing_qty = Decimal(existing.quantity)
                 except Exception:
-                    # Some backends don't support with_for_update; fallback to simple lookup
-                    existing = (
-                        db.query(PantryItem)
-                        .filter(
-                            PantryItem.user_id == user_id,
-                            PantryItem.ingredient_id == item.ingredient_id,
-                            PantryItem.unit == item.unit,
-                            PantryItem.best_before == bb,
-                        )
-                        .first()
-                    )
+                    existing_qty = Decimal(str(float(existing.quantity)))
 
-                if existing:
-                    # Same batch (same expiry date) - increment quantity
-                    try:
-                        existing_qty = Decimal(existing.quantity)
-                    except Exception:
-                        existing_qty = Decimal(str(float(existing.quantity)))
-
-                    try:
-                        add_qty = Decimal(str(item.quantity))
-                    except (InvalidOperation, TypeError):
-                        add_qty = Decimal("0")
-
-                    existing.quantity = existing_qty + add_qty
-                    logger.info(
-                        f"Merged quantity for existing batch: {item.ingredient_id} "
-                        f"expiry={bb}, new_qty={existing.quantity}"
-                    )
-                    db.add(existing)
-                    db.refresh(existing)
-                    return existing
-
-                # Different batch (different expiry date) or first entry - create new row
                 try:
-                    qty = Decimal(str(item.quantity))
+                    add_qty = Decimal(str(item.quantity))
                 except (InvalidOperation, TypeError):
-                    qty = Decimal("0")
+                    add_qty = Decimal("0")
 
+                existing.quantity = existing_qty + add_qty
                 logger.info(
-                    f"Creating new pantry batch: {item.ingredient_id} "
-                    f"qty={qty}, expiry={bb}"
+                    f"Merged quantity for existing batch: {item.ingredient_id} "
+                    f"expiry={bb}, new_qty={existing.quantity}"
                 )
-                pi = PantryItem(
-                    user_id=user_id,
-                    ingredient_id=item.ingredient_id,
-                    quantity=qty,
-                    unit=item.unit,
-                    best_before=bb,
-                    source=None,
-                )
-                db.add(pi)
-                db.flush()
-                db.refresh(pi)
-                return pi
+                db.add(existing)
+                db.commit()
+                db.refresh(existing)
+                return existing
+
+            # Different batch (different expiry date) or first entry - create new row
+            try:
+                qty = Decimal(str(item.quantity))
+            except (InvalidOperation, TypeError):
+                qty = Decimal("0")
+
+            logger.info(
+                f"Creating new pantry batch: {item.ingredient_id} "
+                f"qty={qty}, expiry={bb}"
+            )
+            pi = PantryItem(
+                user_id=user_id,
+                ingredient_id=item.ingredient_id,
+                quantity=qty,
+                unit=item.unit,
+                best_before=bb,
+                source=None,
+            )
+            db.add(pi)
+            db.commit()
+            db.refresh(pi)
+            return pi
         except Exception:
+            db.rollback()
             logger.exception("Error adding pantry item for user %s", user_id)
             raise
 
     @staticmethod
     def remove_item(db: Session, pantry_item_id: uuid.UUID) -> bool:
-        res = (
-            db.query(PantryItem)
-            .filter(PantryItem.pantry_item_id == pantry_item_id)
-            .delete()
-        )
-        if res:
-            db.commit()
-            return True
-        return False
+        pantry_repo = PantryRepository(db)
+        return pantry_repo.delete_by_id(pantry_item_id)
 
     @staticmethod
     def update_quantity(
@@ -343,11 +335,8 @@ class PantryService:
             NotFoundError: If pantry item not found
             ServiceValidationError: If resulting quantity would be negative
         """
-        item = (
-            db.query(PantryItem)
-            .filter(PantryItem.pantry_item_id == pantry_item_id)
-            .first()
-        )
+        pantry_repo = PantryRepository(db)
+        item = pantry_repo.get_by_id(pantry_item_id)
 
         if not item:
             raise NotFoundError(f"Pantry item {pantry_item_id} not found")
@@ -372,20 +361,17 @@ class PantryService:
                 f"Auto-removing pantry item {pantry_item_id} (quantity reached 0). "
                 f"Reason: {reason or 'not specified'}"
             )
-            db.delete(item)
-            db.commit()
+            pantry_repo.delete_by_id(pantry_item_id)
             return None
 
-        # Update quantity
-        item.quantity = new_qty
+        # Update quantity using repository
+        item = pantry_repo.update_quantity(pantry_item_id, new_qty)
         logger.info(
             f"Updated pantry item {pantry_item_id}: "
             f"{current_qty} → {new_qty} (change={change}). "
             f"Reason: {reason or 'not specified'}"
         )
 
-        db.commit()
-        db.refresh(item)
         return item
 
     @staticmethod
@@ -409,20 +395,8 @@ class PantryService:
         Note:
             Items without best_before dates are excluded (can't determine expiry)
         """
-        from datetime import date, timedelta
-
-        cutoff_date = date.today() + timedelta(days=days_threshold)
-
-        items = (
-            db.query(PantryItem)
-            .filter(
-                PantryItem.user_id == user_id,
-                PantryItem.best_before.isnot(None),  # Only items with expiry dates
-                PantryItem.best_before <= cutoff_date,  # Expiring within threshold
-            )
-            .order_by(PantryItem.best_before.asc())  # Oldest first (FIFO)
-            .all()
-        )
+        pantry_repo = PantryRepository(db)
+        items = pantry_repo.get_expiring_items(user_id, days_threshold)
 
         logger.info(
             f"Found {len(items)} items expiring within {days_threshold} days "

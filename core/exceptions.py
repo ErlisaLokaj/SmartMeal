@@ -55,3 +55,55 @@ class NotFoundError(Exception):
 
     def __str__(self) -> str:
         return self.message
+
+
+class ConflictError(Exception):
+    """Raised when a resource conflict occurs (e.g., duplicate entry).
+
+    Attributes are similar to ServiceValidationError. http_status is 409.
+    """
+
+    http_status = 409
+
+    def __init__(self, message: str = "Conflict", details: Optional[Mapping[str, Any]] = None, code: Optional[str] = None):
+        super().__init__(message)
+        self.message = message
+        self.details = details
+        self.code = code
+
+    def to_dict(self) -> dict:
+        payload: dict[str, Any] = {"message": self.message}
+        if self.code:
+            payload["code"] = self.code
+        if self.details:
+            payload["details"] = self.details
+        return payload
+
+    def __str__(self) -> str:
+        return self.message
+
+
+class UnauthorizedError(Exception):
+    """Raised when authentication or authorization fails.
+
+    Attributes are similar to ServiceValidationError. http_status is 401.
+    """
+
+    http_status = 401
+
+    def __init__(self, message: str = "Unauthorized", details: Optional[Mapping[str, Any]] = None, code: Optional[str] = None):
+        super().__init__(message)
+        self.message = message
+        self.details = details
+        self.code = code
+
+    def to_dict(self) -> dict:
+        payload: dict[str, Any] = {"message": self.message}
+        if self.code:
+            payload["code"] = self.code
+        if self.details:
+            payload["details"] = self.details
+        return payload
+
+    def __str__(self) -> str:
+        return self.message

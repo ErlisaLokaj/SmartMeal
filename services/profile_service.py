@@ -17,6 +17,12 @@ from domain.schemas.profile_schemas import (
     AllergyCreate,
     PreferenceCreate,
 )
+from repositories import (
+    UserRepository,
+    DietaryProfileRepository,
+    AllergyRepository,
+    PreferenceRepository,
+)
 from core.exceptions import ServiceValidationError, NotFoundError
 
 logger = logging.getLogger("smartmeal.profile")
@@ -28,7 +34,8 @@ class ProfileService:
     @staticmethod
     def get_user_profile(db: Session, user_id: UUID) -> Optional[AppUser]:
         """Retrieve complete user profile with all related data"""
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_id(user_id)
 
         if user:
             logger.info(f"profile_fetched user_id={user_id}")
@@ -40,7 +47,8 @@ class ProfileService:
     @staticmethod
     def get_all_users(db: Session) -> List[AppUser]:
         """Return all users (no pagination)."""
-        return db.query(AppUser).all()
+        user_repo = UserRepository(db)
+        return user_repo.get_all()
 
     @staticmethod
     def upsert_profile(
@@ -53,51 +61,51 @@ class ProfileService:
         """
         created = False
         try:
-            # Use a transactional block so delete/insert operations are atomic
-            with db.begin():
-                # 1. Get user
-                user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+            # Initialize repositories
+            user_repo = UserRepository(db)
 
-                # If the user doesn't exist, create only if email provided
-                if not user:
-                    if profile_data.email:
-                        user = AppUser(
-                            user_id=user_id,
-                            email=profile_data.email,
-                            full_name=profile_data.full_name,
-                        )
-                        db.add(user)
-                        # flush so relationships can reference the user
-                        db.flush()
-                        created = True
-                    else:
-                        raise ServiceValidationError(
-                            "User not found. To create a new user via PUT include 'email' in the payload or use POST /users."
-                        )
+            # 1. Get user
+            user = user_repo.get_by_id(user_id)
 
-                # 2. Update basic user info
-                if profile_data.full_name is not None:
-                    user.full_name = profile_data.full_name
-
-                # 3. Upsert dietary profile
-                if profile_data.dietary_profile:
-                    ProfileService._upsert_dietary_profile(
-                        db, user_id, profile_data.dietary_profile
+            # If the user doesn't exist, create only if email provided
+            if not user:
+                if profile_data.email:
+                    user = AppUser(
+                        user_id=user_id,
+                        email=profile_data.email,
+                        full_name=profile_data.full_name,
+                    )
+                    db.add(user)
+                    # flush so relationships can reference the user
+                    db.flush()
+                    created = True
+                else:
+                    raise ServiceValidationError(
+                        "User not found. To create a new user via PUT include 'email' in the payload or use POST /users."
                     )
 
-                # 4. Upsert allergies (diff-based)
-                if profile_data.allergies is not None:
-                    ProfileService._upsert_allergies(
-                        db, user_id, profile_data.allergies
-                    )
+            # 2. Update basic user info
+            if profile_data.full_name is not None:
+                user.full_name = profile_data.full_name
 
-                # 5. Upsert preferences (diff-based)
-                if profile_data.preferences is not None:
-                    ProfileService._upsert_preferences(
-                        db, user_id, profile_data.preferences
-                    )
+            # 3. Upsert dietary profile
+            if profile_data.dietary_profile:
+                ProfileService._upsert_dietary_profile(
+                    db, user_id, profile_data.dietary_profile
+                )
 
-                # transaction will commit on block exit
+            # 4. Upsert allergies (diff-based)
+            if profile_data.allergies is not None:
+                ProfileService._upsert_allergies(db, user_id, profile_data.allergies)
+
+            # 5. Upsert preferences (diff-based)
+            if profile_data.preferences is not None:
+                ProfileService._upsert_preferences(
+                    db, user_id, profile_data.preferences
+                )
+
+            # Commit the transaction
+            db.commit()
 
             # refresh user with latest state
             db.refresh(user)
@@ -113,6 +121,7 @@ class ProfileService:
             return user, created
 
         except IntegrityError as e:
+            db.rollback()
             logger.error(f"profile_upsert_failed user_id={user_id} error={str(e)}")
             raise ServiceValidationError(
                 "Database integrity error during profile update"
@@ -126,182 +135,126 @@ class ProfileService:
         db: Session, user_id: UUID, profile_data: DietaryProfileCreate
     ):
         """Upsert dietary profile"""
-        dietary = (
-            db.query(DietaryProfile).filter(DietaryProfile.user_id == user_id).first()
-        )
+        dietary_repo = DietaryProfileRepository(db)
 
-        if dietary:
-            # Update existing
-            for key, value in profile_data.model_dump(exclude_unset=True).items():
-                if key in ["cuisine_likes", "cuisine_dislikes"]:
-                    # dietary model stores cuisine lists as JSON text; keep current schema but normalize here
-                    setattr(dietary, key, json.dumps(value))
-                else:
-                    setattr(dietary, key, value)
-        else:
-            # Create new
-            dietary = DietaryProfile(
-                user_id=user_id,
-                goal=profile_data.goal,
-                activity=profile_data.activity,
-                kcal_target=profile_data.kcal_target,
-                protein_target_g=profile_data.protein_target_g,
-                carb_target_g=profile_data.carb_target_g,
-                fat_target_g=profile_data.fat_target_g,
-                cuisine_likes=json.dumps(
-                    profile_data.model_dump().get("cuisine_likes") or []
-                ),
-                cuisine_dislikes=json.dumps(
-                    profile_data.model_dump().get("cuisine_dislikes") or []
-                ),
-            )
-            db.add(dietary)
+        # Prepare kwargs from profile_data
+        kwargs = profile_data.model_dump(exclude_unset=True)
+
+        # Convert cuisine lists to JSON strings for storage
+        if "cuisine_likes" in kwargs:
+            kwargs["cuisine_likes"] = json.dumps(kwargs["cuisine_likes"])
+        if "cuisine_dislikes" in kwargs:
+            kwargs["cuisine_dislikes"] = json.dumps(kwargs["cuisine_dislikes"])
+
+        # Use repository upsert (only flushes, doesn't commit)
+        dietary_repo.upsert(user_id, **kwargs)
 
     @staticmethod
     def _upsert_allergies(db: Session, user_id: UUID, allergies: List[AllergyCreate]):
         """Diff-based update for allergies: insert new, delete removed, update notes."""
-        existing = db.query(UserAllergy).filter(UserAllergy.user_id == user_id).all()
-        existing_map = {str(a.ingredient_id): a for a in existing}
-
-        incoming_ids = {str(a.ingredient_id) for a in allergies}
-
-        # delete removed
-        for ingr_id, obj in existing_map.items():
-            if ingr_id not in incoming_ids:
-                db.delete(obj)
-
-        # upsert incoming
-        for allergy in allergies:
-            key = str(allergy.ingredient_id)
-            if key in existing_map:
-                obj = existing_map[key]
-                obj.note = allergy.note
-            else:
-                db.add(
-                    UserAllergy(
-                        user_id=user_id,
-                        ingredient_id=allergy.ingredient_id,
-                        note=allergy.note,
-                    )
-                )
+        allergy_repo = AllergyRepository(db)
+        allergy_dicts = [
+            {"ingredient_id": a.ingredient_id, "note": a.note} for a in allergies
+        ]
+        allergy_repo.replace_all(user_id, allergy_dicts)
 
     @staticmethod
     def _upsert_preferences(
         db: Session, user_id: UUID, preferences: List[PreferenceCreate]
     ):
         """Diff-based update for preferences: insert new, delete removed, update strength."""
-        existing = (
-            db.query(UserPreference).filter(UserPreference.user_id == user_id).all()
-        )
-        existing_map = {p.tag: p for p in existing}
-
-        incoming_tags = {p.tag for p in preferences}
-
-        # delete removed
-        for tag, obj in existing_map.items():
-            if tag not in incoming_tags:
-                db.delete(obj)
-
-        # upsert incoming
-        for pref in preferences:
-            if pref.tag in existing_map:
-                obj = existing_map[pref.tag]
-                obj.strength = pref.strength
-            else:
-                db.add(
-                    UserPreference(
-                        user_id=user_id, tag=pref.tag, strength=pref.strength
-                    )
-                )
+        pref_repo = PreferenceRepository(db)
+        pref_dicts = [{"tag": p.tag, "strength": p.strength} for p in preferences]
+        pref_repo.replace_all(user_id, pref_dicts)
 
     @staticmethod
     def create_user(
         db: Session, email: str, full_name: Optional[str] = None
     ) -> AppUser:
         """Create new user"""
-        user = AppUser(email=email, full_name=full_name)
-        db.add(user)
-
-        try:
-            db.commit()
-            db.refresh(user)
-            logger.info(f"user_created user_id={user.user_id} email={email}")
-            return user
-        except IntegrityError:
-            db.rollback()
-            raise ServiceValidationError(f"User with email {email} already exists")
+        user_repo = UserRepository(db)
+        user = user_repo.create_user(email, full_name)
+        logger.info(f"user_created user_id={user.user_id} email={email}")
+        return user
 
     @staticmethod
     def get_dietary_profile(db: Session, user_id: UUID):
         """Return the DietaryProfile for a user or None."""
-        return (
-            db.query(DietaryProfile).filter(DietaryProfile.user_id == user_id).first()
-        )
+        dietary_repo = DietaryProfileRepository(db)
+        return dietary_repo.get_by_user_id(user_id)
 
     @staticmethod
     def set_dietary_profile(
         db: Session, user_id: UUID, profile_data: DietaryProfileCreate
     ):
         """Set or replace a user's dietary profile."""
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user_repo = UserRepository(db)
+        dietary_repo = DietaryProfileRepository(db)
+
+        user = user_repo.get_by_id(user_id)
         if not user:
             raise NotFoundError(f"User not found: {user_id}")
 
         ProfileService._upsert_dietary_profile(db, user_id, profile_data)
         db.commit()
-        return (
-            db.query(DietaryProfile).filter(DietaryProfile.user_id == user_id).first()
-        )
+        return dietary_repo.get_by_user_id(user_id)
 
     @staticmethod
     def get_preferences(db: Session, user_id: UUID):
         """Return list of UserPreference for a user."""
-        return db.query(UserPreference).filter(UserPreference.user_id == user_id).all()
+        pref_repo = PreferenceRepository(db)
+        return pref_repo.get_by_user_id(user_id)
 
     @staticmethod
     def set_preferences(
         db: Session, user_id: UUID, preferences: List[PreferenceCreate]
     ):
         """Replace all preferences for a user."""
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user_repo = UserRepository(db)
+        pref_repo = PreferenceRepository(db)
+
+        user = user_repo.get_by_id(user_id)
         if not user:
             raise NotFoundError(f"User not found: {user_id}")
 
         ProfileService._upsert_preferences(db, user_id, preferences)
         db.commit()
-        return db.query(UserPreference).filter(UserPreference.user_id == user_id).all()
+        return pref_repo.get_by_user_id(user_id)
 
     @staticmethod
     def get_allergies(db: Session, user_id: UUID):
         """Return list of UserAllergy for a user."""
-        return db.query(UserAllergy).filter(UserAllergy.user_id == user_id).all()
+        allergy_repo = AllergyRepository(db)
+        return allergy_repo.get_by_user_id(user_id)
 
     @staticmethod
     def set_allergies(db: Session, user_id: UUID, allergies: List[AllergyCreate]):
         """Replace all allergies for a user."""
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user_repo = UserRepository(db)
+        allergy_repo = AllergyRepository(db)
+
+        user = user_repo.get_by_id(user_id)
         if not user:
             raise NotFoundError(f"User not found: {user_id}")
 
         ProfileService._upsert_allergies(db, user_id, allergies)
         db.commit()
-        return db.query(UserAllergy).filter(UserAllergy.user_id == user_id).all()
+        return allergy_repo.get_by_user_id(user_id)
 
     @staticmethod
     def add_preference(db: Session, user_id: UUID, preference: PreferenceCreate):
         """Add a single preference for a user (no dedupe)."""
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_id(user_id)
         if not user:
             raise NotFoundError(f"User not found: {user_id}")
 
+        pref_repo = PreferenceRepository(db)
         pref = UserPreference(
             user_id=user_id, tag=preference.tag, strength=preference.strength
         )
-        db.add(pref)
         try:
-            db.commit()
-            db.refresh(pref)
-            return pref
+            return pref_repo.create(pref)
         except IntegrityError:
             db.rollback()
             raise ServiceValidationError(
@@ -311,31 +264,24 @@ class ProfileService:
     @staticmethod
     def remove_preference(db: Session, user_id: UUID, tag: str) -> bool:
         """Remove a single preference by tag. Returns True if deleted."""
-        res = (
-            db.query(UserPreference)
-            .filter(UserPreference.user_id == user_id, UserPreference.tag == tag)
-            .delete()
-        )
-        if res:
-            db.commit()
-            return True
-        return False
+        pref_repo = PreferenceRepository(db)
+        res = pref_repo.delete_by_user_and_tag(user_id, tag)
+        return res > 0
 
     @staticmethod
     def add_allergy(db: Session, user_id: UUID, allergy: AllergyCreate):
         """Add a single allergy for a user."""
-        user = db.query(AppUser).filter(AppUser.user_id == user_id).first()
+        user_repo = UserRepository(db)
+        user = user_repo.get_by_id(user_id)
         if not user:
             raise NotFoundError(f"User not found: {user_id}")
 
+        allergy_repo = AllergyRepository(db)
         a = UserAllergy(
             user_id=user_id, ingredient_id=allergy.ingredient_id, note=allergy.note
         )
-        db.add(a)
         try:
-            db.commit()
-            db.refresh(a)
-            return a
+            return allergy_repo.create(a)
         except IntegrityError:
             db.rollback()
             raise ServiceValidationError(
@@ -345,25 +291,15 @@ class ProfileService:
     @staticmethod
     def remove_allergy(db: Session, user_id: UUID, ingredient_id: UUID) -> bool:
         """Remove a single allergy by ingredient_id. Returns True if deleted."""
-        res = (
-            db.query(UserAllergy)
-            .filter(
-                UserAllergy.user_id == user_id,
-                UserAllergy.ingredient_id == ingredient_id,
-            )
-            .delete()
-        )
-        if res:
-            db.commit()
-            return True
-        return False
+        allergy_repo = AllergyRepository(db)
+        res = allergy_repo.delete_by_user_and_ingredient(user_id, ingredient_id)
+        return res > 0
 
     @staticmethod
     def delete_user(db: Session, user_id: UUID) -> bool:
         """Delete a user and all cascading relations. Returns True if deleted."""
-        res = db.query(AppUser).filter(AppUser.user_id == user_id).delete()
-        if res:
-            db.commit()
+        user_repo = UserRepository(db)
+        if user_repo.delete(user_id):
             logger.info(f"user_deleted user_id={user_id}")
             return True
         return False

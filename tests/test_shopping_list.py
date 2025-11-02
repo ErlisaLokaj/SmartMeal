@@ -99,7 +99,6 @@ def test_shopping_list_creation_flow():
     """
     print(EXAMPLE_MEAL_PLAN_FLOW)
 
-
     user_id = uuid4()
     plan_id = uuid4()
 
@@ -117,7 +116,7 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 400,
                 "unit": "g",
                 "checked": False,
-                "from_recipe_id": "recipe-stir-fry"
+                "from_recipe_id": "recipe-stir-fry",
             },
             {
                 "ingredient_id": "uuid-bell-pepper",
@@ -125,7 +124,7 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 100,  # Need 200, have 100
                 "unit": "g",
                 "checked": False,
-                "from_recipe_id": "recipe-stir-fry"
+                "from_recipe_id": "recipe-stir-fry",
             },
             {
                 "ingredient_id": "uuid-pasta",
@@ -133,7 +132,7 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 400,
                 "unit": "g",
                 "checked": False,
-                "from_recipe_id": "recipe-carbonara"
+                "from_recipe_id": "recipe-carbonara",
             },
             {
                 "ingredient_id": "uuid-bacon",
@@ -141,7 +140,7 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 200,
                 "unit": "g",
                 "checked": False,
-                "from_recipe_id": "recipe-carbonara"
+                "from_recipe_id": "recipe-carbonara",
             },
             {
                 "ingredient_id": "uuid-parmesan",
@@ -149,7 +148,7 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 100,
                 "unit": "g",
                 "checked": False,
-                "from_recipe_id": "recipe-carbonara"
+                "from_recipe_id": "recipe-carbonara",
             },
             {
                 "ingredient_id": "uuid-potatoes",
@@ -157,7 +156,7 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 300,
                 "unit": "g",
                 "checked": False,
-                "from_recipe_id": "recipe-curry"
+                "from_recipe_id": "recipe-curry",
             },
             {
                 "ingredient_id": "uuid-carrots",
@@ -165,7 +164,7 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 200,
                 "unit": "g",
                 "checked": False,
-                "from_recipe_id": "recipe-curry"
+                "from_recipe_id": "recipe-curry",
             },
             {
                 "ingredient_id": "uuid-curry-paste",
@@ -173,7 +172,7 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 60,
                 "unit": "g",
                 "checked": False,
-                "from_recipe_id": "recipe-curry"
+                "from_recipe_id": "recipe-curry",
             },
             {
                 "ingredient_id": "uuid-coconut-milk",
@@ -181,16 +180,18 @@ def test_shopping_list_creation_flow():
                 "needed_qty": 400,
                 "unit": "ml",
                 "checked": False,
-                "from_recipe_id": "recipe-curry"
-            }
-        ]
+                "from_recipe_id": "recipe-curry",
+            },
+        ],
     }
 
     print("\n✓ Expected shopping list structure validated")
     print(f"✓ Total items in shopping list: {len(expected_shopping_list['items'])}")
 
-    return expected_shopping_list
-
+    # Validate structure instead of returning
+    assert expected_shopping_list["user_id"] == str(user_id)
+    assert expected_shopping_list["plan_id"] == str(plan_id)
+    assert len(expected_shopping_list["items"]) == 9
 
 
 API_EXAMPLES = """

@@ -256,46 +256,132 @@ C --> FE: expiring items (FIFO ordered)
 
 ' ---------- (3) Search Recipes ----------
 @startuml Search Recipes
-title Search Recipes
+title Search Recipes (with Error Handling & Allergy Filtering)
 autonumber
 actor User
 participant "Frontend" as FE
 participant "Controller" as C
-participant "RecipeSearchService" as RS
+participant "RecipeService" as RS
 database "PostgreSQL" as PG
 database "MongoDB" as MG
-database "Neo4j" as NJ
 
-User -> FE: Search {query, filters}
-FE -> C: GET /recipes?...
-C -> RS: search(userId, query, filters)
+User -> FE: Search recipes {query, cuisine, include, exclude, user_id}
+FE -> C: GET /recipes?q={query}&cuisine={cuisine}&user_id={id}...
+C -> C: validate query parameters (Pydantic)
+alt invalid parameters
+  C --> FE: 422 Unprocessable Entity
+else valid
+  C -> RS: search_recipes(user_id, q, cuisine, limit, offset, include, exclude)
+  
+  alt user_id provided (allergy filtering)
+    RS -> PG: get_user_allergy_ingredient_ids(user_id)
+    PG --> RS: allergen_ingredient_ids[]
+    note right: Get user's allergen IDs from user_allergy table
+  end
+  
+  RS -> RS: build MongoDB query with filters:\n- Text search (title, ingredients.name)\n- Cuisine filter (ID or name)\n- Include/exclude ingredients\n- Exclude allergens ($nin)
+  
+  RS -> MG: _get_db()
+  alt MongoDB not available
+    MG --> RS: None
+    RS -> RS: log warning
+    RS --> C: [] (empty results)
+    C --> FE: 200 OK + [] (graceful degradation)
+  else MongoDB connected
+    MG --> RS: database connection
+    RS -> MG: recipes.find(query).skip(offset).limit(limit)
+    MG --> RS: recipe documents[]
+    
+    RS -> RS: transform documents (_pub: _id → id, add name)
+    RS --> C: List[Recipe]
+    C --> FE: 200 OK + recipes[]
+  end
+end
 
-RS -> PG: getDietaryProfile(userId)
-PG --> RS: profile
-RS -> NJ: getDisallowedIngredients(profile/allergies)
-NJ --> RS: ingredient_ids
-RS -> MG: textSearch(query, filters, -ingredient_ids)
-MG --> RS: recipe hits
+note over RS
+  **Error Handling**
+  • MongoDB unavailable → empty results (graceful)
+  • Query exceptions → logged + empty results
+  • No crashes on DB failures
+end note
 
-RS --> C: results
-C --> FE: recipes list
+note over RS
+  **Allergy Filtering**
+  • Uses $nin operator for efficiency
+  • Direct field query: "ingredients.ingredient_id": {"$nin": [...]}
+  • Simpler than $not + $elemMatch
+end note
 @enduml
 
 
 ' ---------- (4) View Recipe ----------
 @startuml View Recipe
-title View Recipe
+title View Recipe (with ID Validation & Error Handling)
 autonumber
 actor User
 participant "Frontend" as FE
 participant "Controller" as C
+participant "RecipeService" as RS
 database "MongoDB" as MG
 
 User -> FE: Open recipe details
-FE -> C: GET /recipes/{id}
-C -> MG: findById(id)
-MG --> C: recipe doc (ingredients, steps, images)
-C --> FE: recipe details
+FE -> C: GET /recipes/{recipe_id}
+C -> C: validate recipe_id format (length check)
+alt invalid format (empty or > 100 chars)
+  C --> FE: 400 Bad Request (invalid ID format)
+else valid format
+  C -> RS: get_recipe_by_id(recipe_id)
+  
+  RS -> MG: _get_db()
+  alt MongoDB not available
+    MG --> RS: None
+    RS -> RS: log warning
+    RS --> C: None
+    C --> FE: 404 Not Found (graceful degradation)
+  else MongoDB connected
+    MG --> RS: database connection
+    
+    RS -> RS: try to convert recipe_id to ObjectId
+    alt conversion succeeds
+      RS -> MG: recipes.findOne({"_id": ObjectId(recipe_id)})
+    else conversion fails
+      RS -> MG: recipes.findOne({"_id": recipe_id})
+    end
+    
+    alt recipe found
+      MG --> RS: recipe document
+      RS -> RS: transform document (_pub: _id → id, add name)
+      RS --> C: Recipe
+      C --> FE: 200 OK + recipe details
+    else recipe not found
+      MG --> RS: None
+      RS --> C: None
+      C --> FE: 404 Not Found
+    end
+  end
+end
+
+note over C
+  **Input Validation**
+  • Prevents injection attacks
+  • Checks ID length < 100 chars
+  • Rejects empty/invalid IDs
+end note
+
+note over RS
+  **Error Handling**
+  • MongoDB unavailable → None (graceful)
+  • Exceptions → logged + None
+  • Smart ID handling (ObjectId or string)
+  • No crashes on DB failures
+end note
+
+note over RS
+  **ID Flexibility**
+  • Supports MongoDB ObjectId format
+  • Supports UUID string format
+  • Falls back gracefully if conversion fails
+end note
 @enduml
 
 

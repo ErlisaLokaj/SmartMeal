@@ -22,15 +22,20 @@ class BaseRepository(Generic[ModelType], ABC):
         self.model = model
 
     def get_by_id(self, entity_id: UUID) -> Optional[ModelType]:
-        """Get entity by ID"""
-        return (
-            self.db.query(self.model)
-            .filter(
-                self.model.user_id == entity_id
-                if hasattr(self.model, "user_id")
-                else getattr(self.model, f"{self.model.__tablename__}_id") == entity_id
-            )
-            .first()
+        """
+        Get entity by ID.
+
+        Note: This is a fallback implementation. Subclasses should override
+        this method with their specific ID field (user_id, pantry_item_id, etc.)
+
+        Args:
+            entity_id: Entity UUID
+
+        Returns:
+            Entity or None if not found
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} must implement get_by_id() with specific ID field"
         )
 
     def get_all(self, skip: int = 0, limit: int = 100) -> List[ModelType]:

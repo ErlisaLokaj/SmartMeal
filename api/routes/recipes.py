@@ -15,17 +15,21 @@ logger = logging.getLogger("smartmeal.api.recipes")
 
 @router.get("", response_model=List[Dict[str, Any]])
 def search_recipes_endpoint(
-    q: Optional[str] = Query(default=None, description="Search query for title or ingredients"),
+    q: Optional[str] = Query(
+        default=None, description="Search query for title or ingredients"
+    ),
     cuisine: Optional[str] = Query(default=None, description="Cuisine filter"),
     include: Optional[str] = Query(default=None, description="Must include ingredient"),
     exclude: Optional[str] = Query(default=None, description="Must exclude ingredient"),
-    user_id: Optional[str] = Query(default=None, description="User ID for allergy filtering"),
+    user_id: Optional[str] = Query(
+        default=None, description="User ID for allergy filtering"
+    ),
     limit: int = Query(default=20, ge=1, le=100, description="Maximum results"),
     offset: int = Query(default=0, ge=0, description="Pagination offset"),
 ) -> List[Dict[str, Any]]:
     """
     Search recipes with filters.
-    
+
     - **q**: Search in title and ingredient names
     - **cuisine**: Filter by cuisine type
     - **include**: Must contain this ingredient
@@ -54,9 +58,13 @@ def search_recipes_endpoint(
 def get_recipe(recipe_id: str) -> Dict[str, Any]:
     """
     Get a single recipe by ID.
-    
+
     Returns full recipe details including ingredients, steps, and nutrition.
     """
+    # Validate recipe_id format (UUID or MongoDB ObjectId)
+    if not recipe_id or len(recipe_id) > 100:
+        raise HTTPException(status_code=400, detail="Invalid recipe ID format")
+
     try:
         recipe = get_recipe_by_id(recipe_id)
         if not recipe:

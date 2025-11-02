@@ -1,6 +1,6 @@
 """Waste logging and insights routes"""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 import logging
 from uuid import UUID
@@ -11,23 +11,17 @@ from domain.schemas.waste_schemas import (
     WasteLogResponse,
     WasteInsightsResponse,
 )
-from services import WasteService
-from core.exceptions import ServiceValidationError, NotFoundError
+from services.waste_service import WasteService
 
 router = APIRouter(prefix="/waste", tags=["Waste Management"])
 logger = logging.getLogger("smartmeal.api.waste")
-
-
-def get_db():
-    """Database session dependency"""
-    yield from get_db_session()
 
 
 @router.post("", response_model=WasteLogResponse, status_code=status.HTTP_201_CREATED)
 def log_waste(
     waste_data: WasteLogCreate,
     user_id: UUID = Query(..., description="User ID to log waste for"),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_session),
 ):
     """
     Log a waste entry for a user.
@@ -53,42 +47,26 @@ def log_waste(
         404: If user not found
         500: Internal server error
     """
-    try:
-        # Step 1: Validate and normalize waste data (separate from persistence)
-        # This enriches the data with ingredient name and category from Neo4j
-        validated_data = WasteService.validate_waste_data(
-            waste_data.ingredient_id,
-            waste_data.quantity,
-            waste_data.unit
-        )
-        
-        logger.debug(
-            f"Waste data validated: ingredient={validated_data.get('ingredient_name')}, "
-            f"category={validated_data.get('category')}, "
-            f"quantity={validated_data['quantity']}"
-        )
-        
-        # Step 2: Log the waste (persistence)
-        waste_log = WasteService.log_waste(db, user_id, waste_data)
-        
-        logger.info(
-            f"Waste logged successfully for user {user_id}: {waste_log.waste_id}"
-        )
-        
-        return waste_log
-        
-    except NotFoundError as e:
-        logger.warning(f"User not found: {e}")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ServiceValidationError as e:
-        logger.warning(f"Validation error: {e}")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        logger.exception(f"Unexpected error logging waste: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
+    # Step 1: Validate and normalize waste data (separate from persistence)
+    # This enriches the data with ingredient name and category from Neo4j
+    validated_data = WasteService.validate_waste_data(
+        waste_data.ingredient_id, waste_data.quantity, waste_data.unit
+    )
+
+    logger.debug(
+        f"Waste data validated: ingredient={validated_data.get('ingredient_name')}, "
+        f"category={validated_data.get('category')}, "
+        f"quantity={validated_data['quantity']}"
+    )
+
+    # Step 2: Log the waste (persistence)
+    waste_log = WasteService.log_waste(db, user_id, waste_data)
+
+    logger.info(
+        f"Waste logged successfully for user {user_id}: {waste_log.waste_id}"
+    )
+
+    return waste_log
 
 
 @router.get("/insights", response_model=WasteInsightsResponse)
@@ -97,7 +75,7 @@ def get_waste_insights(
     horizon: int = Query(
         30, ge=1, le=365, description="Number of days to look back (default: 30)"
     ),
-    db: Session = Depends(get_db),
+    db: Session = Depends(get_db_session),
 ):
     """
     Get waste insights for a user over a specified time horizon.
@@ -128,27 +106,17 @@ def get_waste_insights(
         404: If user not found
         500: Internal server error
     """
-    try:
-        logger.info(f"Fetching waste insights for user {user_id}, horizon={horizon} days")
-        
-        insights = WasteService.build_insights(db, user_id, horizon)
-        
-        logger.info(
-            f"Waste insights generated for user {user_id}: "
-            f"{insights.total_waste_count} logs, "
-            f"{len(insights.most_wasted_ingredients)} ingredients, "
-            f"{len(insights.waste_by_category)} categories"
-        )
-        
-        return insights
-        
-    except NotFoundError as e:
-        logger.warning(f"User not found: {e}")
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except Exception as e:
-        logger.exception(f"Unexpected error fetching waste insights: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error",
-        )
+    logger.info(
+        f"Fetching waste insights for user {user_id}, horizon={horizon} days"
+    )
 
+    insights = WasteService.build_insights(db, user_id, horizon)
+
+    logger.info(
+        f"Waste insights generated for user {user_id}: "
+        f"{insights.total_waste_count} logs, "
+        f"{len(insights.most_wasted_ingredients)} ingredients, "
+        f"{len(insights.waste_by_category)} categories"
+    )
+
+    return insights

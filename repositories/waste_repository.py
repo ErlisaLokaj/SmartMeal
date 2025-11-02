@@ -35,6 +35,21 @@ class WasteRepository(BaseRepository[WasteLog]):
 
         return query.order_by(WasteLog.occurred_at.desc()).all()
 
+    def get_by_user_in_period(
+        self, user_id: UUID, start_date: datetime, end_date: datetime
+    ) -> List[WasteLog]:
+        """Get all waste logs for a user within a specific period"""
+        return (
+            self.db.query(WasteLog)
+            .filter(
+                WasteLog.user_id == user_id,
+                WasteLog.occurred_at >= start_date,
+                WasteLog.occurred_at <= end_date,
+            )
+            .order_by(WasteLog.occurred_at.desc())
+            .all()
+        )
+
     def create_waste_log(
         self,
         user_id: UUID,

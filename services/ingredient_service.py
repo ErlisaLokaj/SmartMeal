@@ -2,12 +2,11 @@
 
 from typing import List, Optional
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func
 import logging
 from uuid import UUID
 
 from domain.models.ingredient import Ingredient
+from repositories.ingredient_sql_repository import IngredientSQLRepository
 
 logger = logging.getLogger("smartmeal.ingredient")
 
@@ -23,54 +22,37 @@ class IngredientService:
         This is the key method - it ensures we always use the same UUID
         for the same ingredient name.
         """
-        normalized_name = name.lower().strip()
+        ingredient_repo = IngredientSQLRepository(db)
+        ingredient = ingredient_repo.get_or_create(name)
 
-        # Try to find existing
-        ingredient = db.query(Ingredient).filter(
-            func.lower(Ingredient.name) == normalized_name
-        ).first()
-
-        if ingredient:
-            return ingredient
-
-        # Create new if not found
-        ingredient = Ingredient(name=normalized_name)
-        db.add(ingredient)
-
-        try:
-            db.commit()
-            db.refresh(ingredient)
-            logger.info(f"ingredient_created name={normalized_name} id={ingredient.ingredient_id}")
-            return ingredient
-        except IntegrityError:
-            # Race condition - another request created it
-            db.rollback()
-            return db.query(Ingredient).filter(
-                func.lower(Ingredient.name) == normalized_name
-            ).first()
+        # Log only if it was newly created (we can tell by checking if commit happened)
+        # Since get_or_create handles logging internally via commit, we can skip extra logging
+        return ingredient
 
     @staticmethod
     def get_ingredient_by_id(db: Session, ingredient_id: UUID) -> Optional[Ingredient]:
         """Get ingredient by ID."""
-        return db.query(Ingredient).filter(
-            Ingredient.ingredient_id == ingredient_id
-        ).first()
+        ingredient_repo = IngredientSQLRepository(db)
+        return ingredient_repo.get_by_id(ingredient_id)
 
     @staticmethod
     def get_ingredient_by_name(db: Session, name: str) -> Optional[Ingredient]:
         """Get ingredient by name (case-insensitive)."""
-        normalized_name = name.lower().strip()
-        return db.query(Ingredient).filter(
-            func.lower(Ingredient.name) == normalized_name
-        ).first()
+        ingredient_repo = IngredientSQLRepository(db)
+        return ingredient_repo.get_by_name(name)
 
     @staticmethod
     def bulk_import_from_mongo(db: Session):
         """
+        DEPRECATED: Use scripts/migrate_ingredients_from_mongo.py instead.
+
         Import all unique ingredients from MongoDB to PostgreSQL.
 
         This is a one-time migration that can be triggered via API.
         Safe to run multiple times - won't create duplicates.
+
+        NOTE: This method is kept for backward compatibility but should be
+        removed in future versions. Use the standalone migration script instead.
         """
         from adapters import mongo_adapter
 
@@ -86,6 +68,7 @@ class IngredientService:
         ingredients_mongo = list(mongo_db.ingredient_master.find())
 
         stats = {"created": 0, "existing": 0, "errors": 0}
+        ingredient_repo = IngredientSQLRepository(db)
 
         for ing_doc in ingredients_mongo:
             name = ing_doc.get("_id")  # Name is in _id field
@@ -95,26 +78,23 @@ class IngredientService:
                 continue
 
             # Use get_or_create to avoid duplicates
-            ingredient = IngredientService.get_or_create_ingredient(db, name)
+            ingredient = ingredient_repo.get_or_create(name)
 
             if ingredient:
-                # Check if this is new or existing
-                existing_count = db.query(Ingredient).filter(
-                    Ingredient.name == name.lower().strip()
-                ).count()
+                # Check if this is new or existing by checking creation time
+                from datetime import datetime, timedelta
 
-                if existing_count == 1:
-                    # Check creation time to see if it was just created
-                    from datetime import datetime, timedelta
-                    if (datetime.utcnow() - ingredient.created_at.replace(tzinfo=None)) < timedelta(seconds=1):
-                        stats["created"] += 1
-                    else:
-                        stats["existing"] += 1
+                if (
+                    datetime.utcnow() - ingredient.created_at.replace(tzinfo=None)
+                ) < timedelta(seconds=1):
+                    stats["created"] += 1
+                else:
+                    stats["existing"] += 1
 
                 # Update MongoDB with PostgreSQL UUID
                 mongo_db.ingredient_master.update_one(
                     {"_id": name},
-                    {"$set": {"ingredient_id": str(ingredient.ingredient_id)}}
+                    {"$set": {"ingredient_id": str(ingredient.ingredient_id)}},
                 )
 
         logger.info(f"Bulk import complete: {stats}")
@@ -133,8 +113,9 @@ class IngredientService:
 
         mongo_db = mongo_adapter._get_db()
 
-        # Get all ingredients from PostgreSQL
-        ingredients = db.query(Ingredient).all()
+        # Get all ingredients from PostgreSQL using repository
+        ingredient_repo = IngredientSQLRepository(db)
+        ingredients = ingredient_repo.get_all(limit=10000)  # Get all ingredients
         name_to_id = {ing.name: str(ing.ingredient_id) for ing in ingredients}
 
         logger.info(f"Loaded {len(name_to_id)} ingredients from PostgreSQL")
@@ -162,13 +143,15 @@ class IngredientService:
             if modified:
                 mongo_db.recipes.update_one(
                     {"_id": recipe["_id"]},
-                    {"$set": {"ingredients": recipe["ingredients"]}}
+                    {"$set": {"ingredients": recipe["ingredients"]}},
                 )
                 updated_recipes += 1
 
-        logger.info(f"Recipe sync complete: {updated_recipes} recipes, {updated_ingredients} ingredients")
+        logger.info(
+            f"Recipe sync complete: {updated_recipes} recipes, {updated_ingredients} ingredients"
+        )
 
         return {
             "updated_recipes": updated_recipes,
-            "updated_ingredients": updated_ingredients
+            "updated_ingredients": updated_ingredients,
         }

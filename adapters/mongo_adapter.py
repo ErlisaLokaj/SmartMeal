@@ -1,5 +1,4 @@
-"""MongoDB adapter for recipe storage and retrieval.
-"""
+"""MongoDB adapter for recipe storage and retrieval."""
 
 from typing import Optional, Dict, List, Any
 import logging
@@ -82,10 +81,10 @@ def get_recipe(recipe_id: str) -> Optional[Dict[str, Any]]:
 
 
 def search_recipes(
-        query: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        exclude_ingredient_ids: Optional[List[str]] = None,
-        limit: int = 20
+    query: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+    exclude_ingredient_ids: Optional[List[str]] = None,
+    limit: int = 20,
 ) -> List[Dict[str, Any]]:
     """Search recipes with filters.
 
@@ -151,8 +150,7 @@ def get_recipes_by_ids(recipe_ids: List[str]) -> List[Dict[str, Any]]:
 
 
 def aggregate_ingredients(
-        recipe_ids: List[str],
-        servings_list: List[float]
+    recipe_ids: List[str], servings_list: List[float]
 ) -> Dict[str, Dict[str, Any]]:
     """Aggregate ingredients across multiple recipes.
 
@@ -185,7 +183,9 @@ def aggregate_ingredients(
                     continue
 
                 recipe_servings = recipe.get("yields", {}).get("servings", 1)
-                multiplier = target_servings / recipe_servings if recipe_servings > 0 else 1
+                multiplier = (
+                    target_servings / recipe_servings if recipe_servings > 0 else 1
+                )
 
                 for ingredient in recipe.get("ingredients", []):
                     ing_id = ingredient.get("ingredient_id")
@@ -202,14 +202,16 @@ def aggregate_ingredients(
                             "name": name,
                             "total_quantity": 0,
                             "unit": unit,
-                            "from_recipes": []
+                            "from_recipes": [],
                         }
 
                     aggregated[ing_id]["total_quantity"] += quantity
                     if recipe.get("_id") not in aggregated[ing_id]["from_recipes"]:
                         aggregated[ing_id]["from_recipes"].append(recipe.get("_id"))
 
-            logger.info(f"Aggregated {len(aggregated)} unique ingredients from {len(recipes)} recipes")
+            logger.info(
+                f"Aggregated {len(aggregated)} unique ingredients from {len(recipes)} recipes"
+            )
             return aggregated
 
         except Exception:
@@ -222,25 +224,24 @@ def aggregate_ingredients(
 
 
 def get_recipes_by_tags(tags: List[str], limit: int = 20) -> List[Dict[str, Any]]:
-    """Get recipes matching any of the provided tags.
-    """
+    """Get recipes matching any of the provided tags."""
     return search_recipes(tags=tags, limit=limit)
 
 
 def get_recipes_using_ingredient(
-        ingredient_id: str,
-        limit: int = 10
+    ingredient_id: str, limit: int = 10
 ) -> List[Dict[str, Any]]:
-    """Find recipes that use a specific ingredient.
-    """
+    """Find recipes that use a specific ingredient."""
     if _db is not None:
         try:
             recipes = list(
-                _db.recipes.find(
-                    {"ingredients.ingredient_id": ingredient_id}
-                ).limit(limit)
+                _db.recipes.find({"ingredients.ingredient_id": ingredient_id}).limit(
+                    limit
+                )
             )
-            logger.info(f"Found {len(recipes)} recipes using ingredient {ingredient_id}")
+            logger.info(
+                f"Found {len(recipes)} recipes using ingredient {ingredient_id}"
+            )
             return recipes
         except Exception:
             logger.exception(f"Error finding recipes with ingredient {ingredient_id}")
@@ -254,60 +255,11 @@ def get_random_recipes(limit: int = 10) -> List[Dict[str, Any]]:
     if _db is not None:
         try:
             # MongoDB aggregation pipeline for random sampling
-            recipes = list(_db.recipes.aggregate([
-                {"$sample": {"size": limit}}
-            ]))
+            recipes = list(_db.recipes.aggregate([{"$sample": {"size": limit}}]))
             logger.info(f"Retrieved {len(recipes)} random recipes")
             return recipes
         except Exception:
             logger.exception("Error getting random recipes")
             return []
 
-
-# ------------------ Use cases 3-4 ------------------
-def search_recipes_mongo(
-        q: Optional[str] = None,
-        cuisine: Optional[str] = None,
-        limit: int = 20,
-        offset: int = 0,
-) -> List[Dict[str, Any]]:
-    db = _get_db()
-    col = db["recipes"]
-    query: Dict[str, Any] = {}
-
-    ors = []
-    if q:
-        ors.append({"title": {"$regex": q, "$options": "i"}})
-        ors.append({"ingredients": {"$elemMatch": {"$regex": q, "$options": "i"}}})
-    if ors:
-        query["$or"] = ors
-    if cuisine:
-        query["cuisine"] = cuisine
-
-    cursor = col.find(query, {"title": 1}).skip(max(offset, 0)).limit(max(limit, 1))
-    results = []
-    for doc in cursor:
-        rid = str(doc.get("_id"))
-        title = doc.get("title") or doc.get("name")
-        if not title:
-            continue
-        results.append({"id": rid, "title": title})
-    return results
-
-
-def get_recipe_by_id_mongo(recipe_id: str) -> Optional[Dict[str, Any]]:
-    db = _get_db()
-    col = db["recipes"]
-    doc = col.find_one({"_id": recipe_id})
-    if not doc:
-        return None
-    return {
-        "id": str(doc.get("_id")),
-        "title": doc.get("title") or doc.get("name"),
-        "ingredients": doc.get("ingredients") or [],
-        "steps": doc.get("steps") or doc.get("directions") or [],
-        "source": doc.get("source"),
-        "cuisine": doc.get("cuisine"),
-        "tags": doc.get("tags") or [],
-        "images": doc.get("images") or [],
-    }
+    return []

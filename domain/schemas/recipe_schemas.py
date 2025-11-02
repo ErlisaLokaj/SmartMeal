@@ -1,6 +1,6 @@
 """Pydantic schemas for MongoDB recipe documents."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict, field_serializer
 from typing import List, Optional, Dict, Any
 from uuid import UUID, uuid4
 from datetime import datetime
@@ -8,6 +8,7 @@ from datetime import datetime
 
 class RecipeIngredient(BaseModel):
     """Embedded ingredient in a recipe."""
+
     ingredient_id: UUID = Field(default_factory=uuid4)
     name: str
     quantity: float
@@ -18,6 +19,7 @@ class RecipeIngredient(BaseModel):
 
 class RecipeStep(BaseModel):
     """Embedded step in a recipe."""
+
     order: int
     text: str
     duration_min: int
@@ -25,6 +27,7 @@ class RecipeStep(BaseModel):
 
 class RecipeImage(BaseModel):
     """Embedded image in a recipe."""
+
     image_id: UUID = Field(default_factory=uuid4)
     url: str
     caption: str = ""
@@ -32,12 +35,14 @@ class RecipeImage(BaseModel):
 
 class RecipeYields(BaseModel):
     """Recipe yield information."""
+
     servings: int
     serving_unit: str = "servings"
 
 
 class NutritionPerServing(BaseModel):
     """Nutrition information per serving."""
+
     kcal: int = 0
     protein_g: float = 0
     carb_g: float = 0
@@ -46,11 +51,15 @@ class NutritionPerServing(BaseModel):
 
 class RecipeNutrition(BaseModel):
     """Nutrition wrapper."""
+
     per_serving: NutritionPerServing
 
 
 class Recipe(BaseModel):
     """Complete recipe document for MongoDB."""
+
+    model_config = ConfigDict(populate_by_name=True, from_attributes=True)
+
     id: UUID = Field(default_factory=uuid4, alias="_id")
     title: str
     slug: str = ""  # Auto-generated from title if empty
@@ -65,12 +74,15 @@ class Recipe(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     is_deleted: bool = False
 
-    class Config:
-        populate_by_name = True
-        json_encoders = {
-            UUID: str,
-            datetime: lambda v: v.isoformat() + "Z"
-        }
+    @field_serializer("id", "cuisine_id")
+    def serialize_uuid(self, value: UUID) -> str:
+        """Serialize UUID fields to strings."""
+        return str(value)
+
+    @field_serializer("created_at", "updated_at")
+    def serialize_datetime(self, value: datetime) -> str:
+        """Serialize datetime fields to ISO format."""
+        return value.isoformat() + "Z"
 
     def model_post_init(self, __context):
         """Auto-generate slug if not provided."""
@@ -81,6 +93,7 @@ class Recipe(BaseModel):
 # Simplified creation models for easier recipe building
 class SimpleIngredient(BaseModel):
     """Simplified ingredient input."""
+
     name: str
     quantity: float
     unit: str
@@ -90,12 +103,14 @@ class SimpleIngredient(BaseModel):
 
 class SimpleStep(BaseModel):
     """Simplified step input."""
+
     text: str
     duration_min: int = 5
 
 
 class RecipeCreate(BaseModel):
     """Simplified recipe creation."""
+
     title: str
     cuisine: str = "International"
     tags: List[str] = []
@@ -116,7 +131,7 @@ class RecipeCreate(BaseModel):
                 quantity=ing.quantity,
                 unit=ing.unit,
                 optional=ing.optional,
-                prep_note=ing.prep_note
+                prep_note=ing.prep_note,
             )
             for ing in self.ingredients
         ]
@@ -139,16 +154,20 @@ class RecipeCreate(BaseModel):
                     kcal=self.kcal,
                     protein_g=self.protein_g,
                     carb_g=self.carb_g,
-                    fat_g=self.fat_g
+                    fat_g=self.fat_g,
                 )
-            )
+            ),
         )
 
 
 # Add these to the existing recipe_schemas.py file
 
+
 class RecipeRecommendation(BaseModel):
     """Recipe recommendation response."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     recipe_id: str = Field(alias="_id")
     title: str
     slug: str
@@ -160,14 +179,15 @@ class RecipeRecommendation(BaseModel):
     match_score: float = 0.0  # How well it matches user preferences
     pantry_match_count: int = 0  # How many pantry items it uses
 
-    class Config:
-        populate_by_name = True
-
     @classmethod
-    def from_recipe(cls, recipe: Dict[str, Any], score: float = 0, pantry_matches: int = 0):
+    def from_recipe(
+        cls, recipe: Dict[str, Any], score: float = 0, pantry_matches: int = 0
+    ):
         """Create from MongoDB recipe document."""
         # Calculate total time from steps
-        total_time = sum(step.get("duration_min", 0) for step in recipe.get("steps", []))
+        total_time = sum(
+            step.get("duration_min", 0) for step in recipe.get("steps", [])
+        )
 
         return cls(
             _id=recipe.get("_id"),
@@ -179,12 +199,13 @@ class RecipeRecommendation(BaseModel):
             ingredients_count=len(recipe.get("ingredients", [])),
             total_time_min=total_time,
             match_score=score,
-            pantry_match_count=pantry_matches
+            pantry_match_count=pantry_matches,
         )
 
 
 class RecommendationRequest(BaseModel):
     """Request for recipe recommendations."""
+
     user_id: UUID
     limit: int = Field(default=10, ge=1, le=50)
     tags: Optional[List[str]] = None  # Optional tag filters
