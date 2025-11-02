@@ -235,3 +235,65 @@ def suggest_substitutes(ingredient_id: str, limit: int = 5):
         raise RuntimeError(
             f"Failed to query Neo4j for substitutes of '{ingredient_id}': {str(e)}"
         ) from e
+
+
+def get_substitutes_for_recipe(recipe_id: str):
+    """
+    Returns a list of ingredient substitutions for a specific recipe.
+    
+    Args:
+        recipe_id: Recipe ID to get substitutions for
+        
+    Returns:
+        Dict mapping ingredient names to list of substitute names
+        
+    Raises:
+        RuntimeError: If Neo4j driver is not available
+    """
+    if _driver is None:
+        raise RuntimeError("Neo4j driver not initialized")
+    
+    query = """
+    MATCH (r:Recipe {id: $id})-[:CONTAINS]->(i:Ingredient)
+    OPTIONAL MATCH (i)-[:SUBSTITUTED_BY]->(s:Ingredient)
+    RETURN DISTINCT i.name AS ingredient, collect(DISTINCT s.name) AS substitutes
+    """
+    
+    try:
+        with _driver.session() as session:
+            result = session.run(query, {"id": recipe_id})
+            return {r["ingredient"]: r["substitutes"] for r in result if r["substitutes"]}
+    except Exception as e:
+        logger.exception(f"Error getting substitutes for recipe {recipe_id}")
+        raise RuntimeError(f"Failed to get substitutes for recipe: {str(e)}") from e
+
+
+def get_disallowed_ingredient_ids(allergy_names):
+    """
+    Returns a list of ingredient IDs associated with allergies.
+    
+    Args:
+        allergy_names: List of allergy names
+        
+    Returns:
+        List of ingredient IDs that should be excluded
+        
+    Raises:
+        RuntimeError: If Neo4j driver is not available
+    """
+    if _driver is None:
+        raise RuntimeError("Neo4j driver not initialized")
+    
+    query = """
+    MATCH (a:Allergy)-[:TRIGGERS]->(i:Ingredient)
+    WHERE a.name IN $allergies
+    RETURN i.ingredient_id AS id
+    """
+    
+    try:
+        with _driver.session() as session:
+            result = session.run(query, allergies=allergy_names)
+            return [r["id"] for r in result if r.get("id")]
+    except Exception as e:
+        logger.exception("Error getting disallowed ingredients for allergies")
+        raise RuntimeError(f"Failed to get disallowed ingredients: {str(e)}") from e

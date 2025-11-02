@@ -710,3 +710,74 @@ def test_waste_log_with_pantry_integration(monkeypatch):
     )
 
     assert r.status_code == 201
+
+
+# ========== Recipe Recommendation Tests (Use Case 7) ==========
+
+def test_recommendations_endpoint(monkeypatch):
+    """Test the recommendation endpoint (Use Case 7)."""
+    user = make_user()
+
+    # Mock recipe data that would come from MongoDB
+    mock_recipes = [
+        {
+            "_id": "recipe-uuid-1",
+            "title": "Vegetarian Stir-Fry",
+            "slug": "vegetarian-stir-fry",
+            "tags": ["vegetarian", "quick", "asian"],
+            "yields": {"servings": 4, "serving_unit": "servings"},
+            "ingredients": [
+                {"ingredient_id": str(uuid.uuid4()), "name": "tofu", "quantity": 400, "unit": "g"}
+            ],
+            "steps": [
+                {"order": 1, "text": "Cook tofu", "duration_min": 10}
+            ],
+            "cuisine_id": "asian-cuisine-id",
+            "match_score": 80.0,
+            "pantry_match_count": 0
+        },
+        {
+            "_id": "recipe-uuid-2",
+            "title": "Quick Salad",
+            "slug": "quick-salad",
+            "tags": ["vegetarian", "quick", "healthy"],
+            "yields": {"servings": 2, "serving_unit": "servings"},
+            "ingredients": [
+                {"ingredient_id": str(uuid.uuid4()), "name": "lettuce", "quantity": 200, "unit": "g"}
+            ],
+            "steps": [
+                {"order": 1, "text": "Toss salad", "duration_min": 5}
+            ],
+            "cuisine_id": "american-cuisine-id",
+            "match_score": 70.0,
+            "pantry_match_count": 0
+        }
+    ]
+
+    # Mock ProfileService.get_user_profile to return our test user
+    from services.recommendation_service import RecommendationService
+
+    monkeypatch.setattr(ProfileService, "get_user_profile", lambda db, uid: user)
+
+    # Mock RecommendationService.recommend to return mock recipes
+    def fake_recommend(db, user_id, limit, tag_filters):
+        return mock_recipes[:limit]
+
+    monkeypatch.setattr(RecommendationService, "recommend", fake_recommend)
+
+    # Test: Get recommendations with default limit
+    r = client.get(f"/recommendations/{user.user_id}")
+    assert r.status_code == 200
+    data = r.json()
+    assert isinstance(data, list)
+    assert len(data) == 2  # Should return both mock recipes
+    assert data[0]["title"] == "Vegetarian Stir-Fry"
+    assert data[0]["match_score"] == 80.0
+    assert "tags" in data[0]
+
+    # Test: Get recommendations with custom limit
+    r2 = client.get(f"/recommendations/{user.user_id}?limit=1")
+    assert r2.status_code == 200
+    data2 = r2.json()
+    assert len(data2) == 1  # Should return only 1 recipe
+    assert data2[0]["_id"] == "recipe-uuid-1"

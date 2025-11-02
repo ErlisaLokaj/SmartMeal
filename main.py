@@ -15,14 +15,14 @@ import inspect
 from typing import Optional
 
 # Import routes from new structure
-from api.routes import users, profiles, pantry, waste, health
+from api.routes import users, profiles, pantry, waste, health, recipes, recommendations, shopping
 
 # Import database and adapters
 from domain.models import init_database
-from adapters import graph_adapter
+from adapters import graph_adapter, mongo_adapter
 
 # Import configuration
-from core.config import settings, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+from core.config import settings, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, MONGO_URI, MONGO_DB
 
 # Import middleware
 from api.middleware import (
@@ -89,6 +89,15 @@ async def lifespan(app: FastAPI):
             "Failed to initialize Neo4j adapter; continuing with stub/fallback: %s", e
         )
 
+    # Initialize MongoDB connection (best-effort)
+    try:
+        mongo_adapter.connect(MONGO_URI, MONGO_DB)
+        _logger.info("MongoDB connection established")
+    except Exception as e:
+        _logger.warning(
+            "Failed to initialize MongoDB adapter; continuing without recipes: %s", e
+        )
+
     try:
         yield
     finally:
@@ -99,6 +108,12 @@ async def lifespan(app: FastAPI):
             _logger.info("Neo4j connection closed")
         except Exception as e:
             _logger.exception("Error closing Neo4j adapter during shutdown: %s", e)
+        
+        try:
+            mongo_adapter.close()
+            _logger.info("MongoDB connection closed")
+        except Exception as e:
+            _logger.exception("Error closing MongoDB adapter during shutdown: %s", e)
 
 
 # Create FastAPI application with enhanced configuration
@@ -140,6 +155,9 @@ app.include_router(profiles.router, prefix=settings.api_prefix)
 app.include_router(pantry.router, prefix=settings.api_prefix)
 app.include_router(waste.router, prefix=settings.api_prefix)
 app.include_router(health.router, prefix=settings.api_prefix)
+app.include_router(recipes.router, prefix=settings.api_prefix)
+app.include_router(recommendations.router, prefix=settings.api_prefix)
+app.include_router(shopping.router, prefix=settings.api_prefix)
 
 
 if __name__ == "__main__":

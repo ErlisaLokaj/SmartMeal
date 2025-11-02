@@ -57,8 +57,10 @@ class Settings(BaseSettings):
     neo4j_user: str = Field(default="neo4j", description="Neo4j username")
     neo4j_password: str = Field(default="password", description="Neo4j password")
 
-    # MongoDB settings (for future use)
-    mongo_uri: Optional[str] = Field(default=None, description="MongoDB connection URI")
+    # MongoDB settings
+    mongo_uri: str = Field(
+        default="mongodb://localhost:27017", description="MongoDB connection URI"
+    )
     mongo_db_name: str = Field(default="smartmeal", description="MongoDB database name")
 
     # Logging
@@ -126,3 +128,6 @@ POSTGRES_DB_URL = settings.postgres_db_url
 NEO4J_URI = settings.neo4j_uri
 NEO4J_USER = settings.neo4j_user
 NEO4J_PASSWORD = settings.neo4j_password
+MONGO_URI = settings.mongo_uri
+MONGO_DB = settings.mongo_db_name
+

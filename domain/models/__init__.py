@@ -11,6 +11,7 @@ from domain.models.database import (
 )
 from domain.models.user import AppUser, DietaryProfile, UserAllergy, UserPreference
 from domain.models.pantry import PantryItem, WasteLog
+from domain.models.ingredient import Ingredient
 from domain.models.meal_plan import (
     MealPlan,
     MealEntry,
@@ -32,6 +33,8 @@ __all__ = [
     "DietaryProfile",
     "UserAllergy",
     "UserPreference",
+    # Ingredient models
+    "Ingredient",
     # Pantry models
     "PantryItem",
     "WasteLog",
