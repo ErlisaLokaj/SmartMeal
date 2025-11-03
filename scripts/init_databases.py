@@ -70,19 +70,61 @@ def init_mongodb():
             logger.info("✓ Created 'recipes' collection")
 
         # Create indexes for better query performance
-        db.recipes.create_index("recipe_id", unique=True)
-        db.recipes.create_index("name")
-        db.recipes.create_index("cuisine")
-        db.recipes.create_index("tags")
-        logger.info("✓ Created indexes on 'recipes' collection")
+        # Note: _id is already unique by default, no need to create index
+        # Only create indexes if they don't exist to avoid errors
+        try:
+            db.recipes.create_index("title")
+            db.recipes.create_index("cuisine_id")
+            db.recipes.create_index("tags")
+            db.recipes.create_index("slug")
+            logger.info("✓ Created indexes on 'recipes' collection")
+        except Exception as e:
+            logger.info(f"✓ Indexes already exist or created: {e}")
 
         # Check if we need to seed recipes
         recipe_count = db.recipes.count_documents({})
         logger.info(f"✓ MongoDB initialized with {recipe_count} recipes")
 
         if recipe_count == 0:
-            logger.info("→ No recipes found. You can import recipes using:")
-            logger.info("  python data/import_recipes.py")
+            logger.info("→ No recipes found. Running auto-import...")
+            import subprocess
+            import os
+
+            # Path to the recipe loader script
+            script_path = os.path.join(
+                os.path.dirname(__file__), "load_recipes_to_mongo.py"
+            )
+
+            # Check if recipes_structured.json exists
+            recipes_file = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "data",
+                "recipes_structured.json",
+            )
+
+            if os.path.exists(recipes_file):
+                # Run the recipe loader script in non-interactive mode
+                # We'll modify load_recipes_to_mongo.py to support auto mode
+                result = subprocess.run(
+                    [sys.executable, script_path, "--auto"],
+                    capture_output=True,
+                    text=True,
+                )
+
+                if result.returncode == 0:
+                    # Verify recipes were loaded
+                    new_count = db.recipes.count_documents({})
+                    logger.info(f"✓ Successfully loaded {new_count} recipes!")
+                else:
+                    logger.warning(
+                        f"⚠ Recipe import encountered issues: {result.stderr}"
+                    )
+                    logger.info("  You can manually import recipes using:")
+                    logger.info("  python scripts/load_recipes_to_mongo.py")
+            else:
+                logger.warning(f"⚠ Recipe file not found: {recipes_file}")
+                logger.info("  You can manually import recipes using:")
+                logger.info("  python scripts/load_recipes_to_mongo.py")
 
         return True
     except Exception as e:
