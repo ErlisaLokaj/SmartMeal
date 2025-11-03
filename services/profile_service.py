@@ -23,7 +23,7 @@ from repositories import (
     AllergyRepository,
     PreferenceRepository,
 )
-from core.exceptions import ServiceValidationError, NotFoundError
+from app.exceptions import ServiceValidationError, NotFoundError
 
 logger = logging.getLogger("smartmeal.profile")
 

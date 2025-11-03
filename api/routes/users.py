@@ -16,7 +16,7 @@ from domain.schemas.profile_schemas import (
     PreferenceResponse,
 )
 from services.profile_service import ProfileService
-from core.exceptions import ServiceValidationError, NotFoundError
+from app.exceptions import ServiceValidationError, NotFoundError
 from domain.mappers import UserMapper
 
 router = APIRouter(prefix="/users", tags=["Users"])

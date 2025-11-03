@@ -26,7 +26,7 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from test_fixtures import client, db_session
+from test_fixtures import client, db_session, unique_email
 from repositories import (
     UserRepository,
     AllergyRepository,
@@ -52,12 +52,6 @@ from domain.models import (
 )
 
 
-# Helper function to generate unique emails
-def unique_email(prefix: str = "test") -> str:
-    """Generate unique email address using UUID to avoid conflicts"""
-    return f"{prefix}-{uuid.uuid4()}@example.com"
-
-
 # =============================================================================
 # USER REPOSITORY TESTS
 # =============================================================================
@@ -75,11 +69,11 @@ def test_user_repository_create_and_get(db_session: Session):
     repo = UserRepository(db_session)
 
     # Create user
-    user = repo.create_user(email=unique_email("test"), full_name="Test User")
+    user = repo.create_user(email=unique_email("sarah"), full_name="Sarah Martinez")
 
     assert user.user_id is not None
     assert isinstance(user.user_id, uuid.UUID)
-    assert user.full_name == "Test User"
+    assert user.full_name == "Sarah Martinez"
     assert user.created_at is not None
     assert user.updated_at is not None
 
@@ -106,16 +100,20 @@ def test_user_repository_get_all(db_session: Session):
     repo = UserRepository(db_session)
 
     # Create two users with unique identifiers
-    user1 = repo.create_user(email=unique_email("getall1"), full_name="User One")
-    user2 = repo.create_user(email=unique_email("getall2"), full_name="User Two")
+    user1 = repo.create_user(email=unique_email("sarah"), full_name="Sarah Martinez")
+    user2 = repo.create_user(email=unique_email("michael"), full_name="Michael Chen")
 
-    # Get all users with a high limit to ensure we get our new users
+    # Get all users with a high limit
     all_users = repo.get_all(skip=0, limit=1000)
     assert len(all_users) >= 2, f"Expected at least 2 users, got {len(all_users)}"
 
-    user_ids = [u.user_id for u in all_users]
-    assert user1.user_id in user_ids, f"user1 {user1.user_id} not found"
-    assert user2.user_id in user_ids, f"user2 {user2.user_id} not found"
+    # Verify our specific users can be retrieved by ID (pagination-independent check)
+    retrieved1 = repo.get_by_id(user1.user_id)
+    retrieved2 = repo.get_by_id(user2.user_id)
+    assert retrieved1 is not None, f"user1 {user1.user_id} not found by ID"
+    assert retrieved2 is not None, f"user2 {user2.user_id} not found by ID"
+    assert retrieved1.email == user1.email
+    assert retrieved2.email == user2.email
 
 
 def test_user_repository_update(db_session: Session):

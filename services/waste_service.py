@@ -16,7 +16,7 @@ from domain.schemas.waste_schemas import (
     WasteTrend,
 )
 from repositories import UserRepository, WasteRepository, IngredientRepository
-from core.exceptions import NotFoundError, ServiceValidationError
+from app.exceptions import NotFoundError, ServiceValidationError
 
 logger = logging.getLogger("smartmeal.waste")
 

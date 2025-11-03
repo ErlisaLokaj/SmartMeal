@@ -62,52 +62,15 @@ do
 done
 echo "  ✓ Neo4j is ready!"
 
-# Auto-seed Neo4j if enabled and no Ingredient nodes exist
-if [ "${NEO4J_AUTO_SEED:-true}" = "true" ]; then
-  echo ""
-  echo "================================================"
-  echo "Neo4j Auto-Seed Check"
-  echo "================================================"
-  python - <<'PY'
-import os, sys, subprocess
-
-from neo4j import GraphDatabase, basic_auth
-
-uri = os.environ.get('NEO4J_URI', 'bolt://neo4j:7687')
-user = os.environ.get('NEO4J_USER', 'neo4j')
-pw = os.environ.get('NEO4J_PASSWORD', 'neo4j')
-
-try:
-    drv = GraphDatabase.driver(uri, auth=basic_auth(user, pw))
-    with drv.session() as s:
-        try:
-            r = s.run('MATCH (n:Ingredient) RETURN count(n) AS cnt')
-            cnt = r.single().get('cnt')
-        except Exception:
-            cnt = 0
-    drv.close()
-    
-    if not cnt:
-        print('  → No Ingredient nodes found - running seeder...')
-        rc = subprocess.call([
-            'python', 
-            '/app/scripts/seed_neo4j.py', 
-            '--file', '/app/data/substitution_pairs.json',
-            '--uri', uri,
-            '--user', user,
-            '--password', pw
-        ])
-        if rc != 0:
-            print(f'  ✗ Seeder failed with code {rc}')
-            sys.exit(rc)
-        else:
-            print('  ✓ Neo4j seeding completed successfully!')
-    else:
-        print(f'  ✓ Found {cnt} Ingredient nodes - skipping seeding')
-except Exception as e:
-    print(f'  ✗ Error during Neo4j seed check: {e}')
-    sys.exit(1)
-PY
+# Initialize all databases (PostgreSQL tables, MongoDB collections, Neo4j constraints)
+echo ""
+echo "================================================"
+echo "Database Initialization"
+echo "================================================"
+python /app/scripts/init_databases.py
+if [ $? -ne 0 ]; then
+  echo "  ✗ Database initialization failed!"
+  exit 1
 fi
 
 echo ""

@@ -1,10 +1,10 @@
 """
-Core package - Application configuration and utilities.
-Contains settings, exceptions, and core business logic.
+App package - Application configuration and core utilities.
+Contains settings, exceptions, and foundational application code.
 """
 
-from core.config import settings
-from core.exceptions import (
+from app.config import settings
+from app.exceptions import (
     ServiceValidationError,
     NotFoundError,
     ConflictError,

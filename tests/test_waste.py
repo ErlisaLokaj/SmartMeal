@@ -29,7 +29,7 @@ from domain.schemas.waste_schemas import (
     WasteByCategory,
     WasteTrend,
 )
-from core.exceptions import NotFoundError, ServiceValidationError
+from app.exceptions import NotFoundError, ServiceValidationError
 
 
 # =============================================================================
@@ -175,7 +175,7 @@ def test_log_waste_success(monkeypatch):
 
     Data consistency:
     - Test user: make_user()
-    - Test waste: 2.5 kg, reason "expired"
+    - Test waste: 2.5 kg expired tomatoes (realistic waste scenario)
     - Ingredient validation returns standard metadata
 
     Integration:
@@ -184,7 +184,14 @@ def test_log_waste_success(monkeypatch):
     - Waste log stored in PostgreSQL
     """
     user_id = uuid.uuid4()
-    waste_log = make_waste_log(user_id=user_id, quantity=2.5, reason="expired")
+    # Specify unit explicitly for this test scenario: 2.5kg of spoiled tomatoes
+    waste_log = make_waste_log(
+        user_id=user_id,
+        ingredient_name="tomato",
+        quantity=Decimal("2.5"),
+        unit="kg",
+        reason="expired",
+    )
 
     # Mock WasteService.validate_waste_data
     def fake_validate(ingredient_id, quantity, unit):

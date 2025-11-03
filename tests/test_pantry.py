@@ -22,7 +22,7 @@ from decimal import Decimal
 
 from test_fixtures import client, make_user, make_pantry_item
 from services.pantry_service import PantryService
-from core.exceptions import NotFoundError
+from app.exceptions import NotFoundError
 
 
 # =============================================================================
@@ -343,11 +343,19 @@ def test_update_pantry_quantity_consume(monkeypatch):
     Data consistency:
     - Test uses consistent make_pantry_item() factory
     - Decimal precision maintained throughout
+    - Starting with 800g chicken, consuming 300g → 500g remaining
     """
-    item = make_pantry_item(quantity=2.0)
+    item = make_pantry_item(
+        ingredient_name="chicken breast", quantity=Decimal("800"), unit="g"
+    )
 
-    # After consuming 0.5, should have 1.5 left
-    updated_item = make_pantry_item(pantry_item_id=item.pantry_item_id, quantity=1.5)
+    # After consuming 300g, should have 500g left
+    updated_item = make_pantry_item(
+        pantry_item_id=item.pantry_item_id,
+        ingredient_name="chicken breast",
+        quantity=Decimal("500"),
+        unit="g",
+    )
 
     monkeypatch.setattr(
         PantryService,
@@ -357,12 +365,12 @@ def test_update_pantry_quantity_consume(monkeypatch):
 
     r = client.patch(
         f"/pantry/{item.pantry_item_id}",
-        json={"quantity_change": -0.5, "reason": "cooking"},
+        json={"quantity_change": -300, "reason": "cooking"},
     )
 
     assert r.status_code == 200
     body = r.json()
-    assert float(body["quantity"]) == 1.5
+    assert float(body["quantity"]) == 500.0  # 800g - 300g
 
 
 def test_update_pantry_quantity_add(monkeypatch):
@@ -382,11 +390,17 @@ def test_update_pantry_quantity_add(monkeypatch):
     Data consistency:
     - Positive quantity_change indicates addition
     - Negative quantity_change indicates consumption (see test_update_pantry_quantity_consume)
+    - Starting with 500g (realistic rice portion), adding 200g → 700g total
     """
-    item = make_pantry_item(quantity=1.0)
+    item = make_pantry_item(ingredient_name="rice", quantity=Decimal("500"), unit="g")
 
-    # After adding 2, should have 3
-    updated_item = make_pantry_item(pantry_item_id=item.pantry_item_id, quantity=3.0)
+    # After adding 200g, should have 700g
+    updated_item = make_pantry_item(
+        pantry_item_id=item.pantry_item_id,
+        ingredient_name="rice",
+        quantity=Decimal("700"),
+        unit="g",
+    )
 
     monkeypatch.setattr(
         PantryService, "update_quantity", lambda db, pid, qc, reason: updated_item
@@ -394,12 +408,12 @@ def test_update_pantry_quantity_add(monkeypatch):
 
     r = client.patch(
         f"/pantry/{item.pantry_item_id}",
-        json={"quantity_change": 2.0, "reason": "found_more"},
+        json={"quantity_change": 200, "reason": "found_more"},
     )
 
     assert r.status_code == 200
     body = r.json()
-    assert float(body["quantity"]) == 3.0
+    assert float(body["quantity"]) == 700.0  # 500g + 200g
 
 
 def test_update_pantry_quantity_not_found(monkeypatch):

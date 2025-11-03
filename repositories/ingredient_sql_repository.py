@@ -113,14 +113,14 @@ class IngredientSQLRepository(BaseRepository[Ingredient]):
                 # Create new
                 ingredient = Ingredient(name=normalized_name)
                 self.db.add(ingredient)
+                results.append(ingredient)  # Add the new ingredient to results
 
         # Commit all at once
         try:
             self.db.commit()
             # Refresh all new items
             for ingredient in results:
-                if ingredient not in results:  # Only new ones
-                    self.db.refresh(ingredient)
+                self.db.refresh(ingredient)
         except IntegrityError:
             # Handle race conditions
             self.db.rollback()

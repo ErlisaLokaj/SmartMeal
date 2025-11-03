@@ -12,7 +12,7 @@ import logging
 from domain.models import get_db_session
 from domain.schemas.recipe_schemas import RecipeRecommendation
 from services.recommendation_service import RecommendationService
-from core.exceptions import NotFoundError
+from app.exceptions import NotFoundError
 
 router = APIRouter(prefix="/recommendations", tags=["Recommendations"])
 logger = logging.getLogger("smartmeal.api.recommendations")

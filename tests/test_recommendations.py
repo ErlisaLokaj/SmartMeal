@@ -331,7 +331,7 @@ def test_recommendations_user_not_found(monkeypatch):
 
     This prevents recommendations for non-existent users.
     """
-    from core.exceptions import NotFoundError
+    from app.exceptions import NotFoundError
     from services.recommendation_service import RecommendationService
 
     def fake_recommend_not_found(db, user_id, limit, tag_filters=None):

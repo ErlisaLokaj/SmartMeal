@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 
 from repositories.base import BaseRepository
 from domain.models import AppUser, UserAllergy, UserPreference, DietaryProfile
-from core.exceptions import ServiceValidationError
+from app.exceptions import ServiceValidationError
 
 
 class UserRepository(BaseRepository[AppUser]):

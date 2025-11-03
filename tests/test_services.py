@@ -23,13 +23,13 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from unittest.mock import Mock, patch
 
-from test_fixtures import client, db_session, make_user
+from test_fixtures import client, db_session, make_user, unique_email
 from services.profile_service import ProfileService
 from services.ingredient_service import IngredientService
 from services.pantry_service import PantryService
 from services.shopping_service import ShoppingService
 from services.waste_service import WasteService
-from core.exceptions import NotFoundError, ServiceValidationError
+from app.exceptions import NotFoundError, ServiceValidationError
 from domain.models import AppUser, DietaryProfile, UserPreference, UserAllergy
 from domain.schemas.profile_schemas import (
     ProfileUpdateRequest,
@@ -40,12 +40,6 @@ from domain.schemas.profile_schemas import (
 )
 from domain.schemas.waste_schemas import WasteLogCreate
 from domain.schemas.shopping_schemas import ShoppingListCreate
-
-
-# Helper function to generate unique emails
-def unique_email(prefix: str = "test") -> str:
-    """Generate unique email address using UUID to avoid conflicts"""
-    return f"{prefix}-{uuid.uuid4()}@example.com"
 
 
 # =============================================================================
@@ -419,7 +413,9 @@ def test_pantry_service_add_and_get(db_session: Session):
     - Creates pantry item with proper defaults
     - get_pantry() returns user items
     """
-    user = ProfileService.create_user(db_session, unique_email("pantry"), "Pantry User")
+    user = ProfileService.create_user(
+        db_session, unique_email("sarah"), "Sarah Martinez"
+    )
     ing = IngredientService.get_or_create_ingredient(db_session, "rice")
 
     # Mock Neo4j validation
@@ -647,7 +643,7 @@ def test_waste_service_log_waste(db_session: Session):
     - Creates waste log entry
     - Returns WasteLog with all fields
     """
-    user = ProfileService.create_user(db_session, unique_email("waste"), "Waste User")
+    user = ProfileService.create_user(db_session, unique_email("emma"), "Emma Johnson")
     ing = IngredientService.get_or_create_ingredient(db_session, "lettuce")
 
     # Mock Neo4j validation

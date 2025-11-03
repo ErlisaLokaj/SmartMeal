@@ -5,7 +5,7 @@ Database configuration and session management.
 import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
-from core.config import settings
+from app.config import settings
 
 logger = logging.getLogger("smartmeal.database")
 

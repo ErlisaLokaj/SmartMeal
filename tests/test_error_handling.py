@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from unittest.mock import Mock, patch
 
-from test_fixtures import client, db_session
+from test_fixtures import client, db_session, unique_email
 from services.profile_service import ProfileService
 from services.ingredient_service import IngredientService
 from services.pantry_service import PantryService
@@ -36,13 +36,7 @@ from domain.schemas.profile_schemas import (
     AllergyCreate,
     PreferenceCreate,
 )
-from core.exceptions import NotFoundError, ServiceValidationError
-
-
-# Helper function to generate unique emails
-def unique_email(prefix: str = "test") -> str:
-    """Generate unique email address using UUID to avoid conflicts"""
-    return f"{prefix}-{uuid.uuid4()}@example.com"
+from app.exceptions import NotFoundError, ServiceValidationError
 
 
 # =============================================================================
@@ -62,12 +56,12 @@ def test_user_duplicate_email(db_session: Session):
 
     # Create first user
     email = unique_email("duplicate")
-    user1 = repo.create_user(email=email, full_name="User One")
+    user1 = repo.create_user(email=email, full_name="Sarah Martinez")
     assert user1.user_id is not None
 
     # Try to create second user with same email
     with pytest.raises(ServiceValidationError):
-        user2 = repo.create_user(email=email, full_name="User Two")
+        user2 = repo.create_user(email=email, full_name="Emma Johnson")
 
 
 def test_pantry_invalid_quantity(db_session: Session):
@@ -78,7 +72,9 @@ def test_pantry_invalid_quantity(db_session: Session):
     - Negative quantities are rejected by DB check constraint
     - Database enforces quantity >= 0
     """
-    user = ProfileService.create_user(db_session, unique_email("qty"), "Qty User")
+    user = ProfileService.create_user(
+        db_session, unique_email("michael"), "Michael Chen"
+    )
     ing = IngredientService.get_or_create_ingredient(db_session, "test")
     pantry_repo = PantryRepository(db_session)
 
@@ -102,7 +98,7 @@ def test_pantry_missing_ingredient_validation(db_session: Session):
     - PantryService validates ingredient exists in Neo4j
     - Raises ServiceValidationError if ingredient not found
     """
-    user = ProfileService.create_user(db_session, unique_email("noing"), "No Ing User")
+    user = ProfileService.create_user(db_session, unique_email("raj"), "Raj Patel")
     fake_ing_id = uuid.uuid4()
 
     # Mock Neo4j to return None (ingredient not found)
@@ -129,7 +125,9 @@ def test_waste_invalid_reason(db_session: Session):
     - Valid reasons are accepted
     - Invalid reasons should be rejected (if validation exists)
     """
-    user = ProfileService.create_user(db_session, unique_email("reason"), "Reason User")
+    user = ProfileService.create_user(
+        db_session, unique_email("sarah"), "Sarah Martinez"
+    )
     ing = IngredientService.get_or_create_ingredient(db_session, "tomato")
 
     # Valid reason
@@ -269,9 +267,7 @@ def test_user_concurrent_preference_updates(db_session: Session):
     - replace_all() is atomic within transaction
     - Last write wins if concurrent updates occur
     """
-    user = ProfileService.create_user(
-        db_session, unique_email("concurrent"), "Concurrent User"
-    )
+    user = ProfileService.create_user(db_session, unique_email("raj"), "Raj Patel")
 
     # Set initial preferences
     ProfileService.set_preferences(
@@ -311,7 +307,7 @@ def test_pantry_set_rollback_on_error(db_session: Session):
     - Pantry remains in previous state
     """
     user = ProfileService.create_user(
-        db_session, unique_email("rollback"), "Rollback User"
+        db_session, unique_email("michael"), "Michael Chen"
     )
     ing1 = IngredientService.get_or_create_ingredient(db_session, "item1")
     ing2 = IngredientService.get_or_create_ingredient(db_session, "item2")
@@ -380,9 +376,7 @@ def test_dietary_profile_null_fields(db_session: Session):
     - Can create profile with minimal data (required fields only)
     - Optional fields can be NULL
     """
-    user = ProfileService.create_user(
-        db_session, unique_email("minimal"), "Minimal User"
-    )
+    user = ProfileService.create_user(db_session, unique_email("emma"), "Emma Johnson")
 
     # Create with only required fields (goal and activity)
     profile_data = DietaryProfileCreate(
@@ -413,7 +407,7 @@ def test_pantry_far_future_expiration(db_session: Session):
     - Can set expiration years in future
     - get_expiring_soon() doesn't include items with distant expiration
     """
-    user = ProfileService.create_user(db_session, unique_email("future"), "Future User")
+    user = ProfileService.create_user(db_session, unique_email("emma"), "Emma Johnson")
     ing = IngredientService.get_or_create_ingredient(db_session, "canned_food")
 
     with patch.object(PantryService, "validate_ingredient_data") as mock_validate:
@@ -434,7 +428,9 @@ def test_pantry_far_future_expiration(db_session: Session):
         item = PantryService.add_item(db_session, user.user_id, item_data)
 
     # Get expiring within 30 days
-    expiring = PantryService.get_expiring_soon(db_session, user.user_id, days_threshold=30)
+    expiring = PantryService.get_expiring_soon(
+        db_session, user.user_id, days_threshold=30
+    )
 
     # Should not include item expiring in 5 years
     assert not any(e.pantry_item_id == item.pantry_item_id for e in expiring)
@@ -448,7 +444,7 @@ def test_waste_very_small_quantity(db_session: Session):
     - Can log waste with fractional quantities (e.g., 0.01 kg)
     - Decimal precision is maintained
     """
-    user = ProfileService.create_user(db_session, unique_email("small"), "Small User")
+    user = ProfileService.create_user(db_session, unique_email("raj"), "Raj Patel")
     ing = IngredientService.get_or_create_ingredient(db_session, "spice")
 
     with patch.object(WasteService, "validate_waste_data") as mock_validate:
@@ -479,7 +475,9 @@ def test_waste_very_large_quantity(db_session: Session):
     - Can log waste with large quantities
     - No artificial upper limit
     """
-    user = ProfileService.create_user(db_session, unique_email("large"), "Large User")
+    user = ProfileService.create_user(
+        db_session, unique_email("michael"), "Michael Chen"
+    )
     ing = IngredientService.get_or_create_ingredient(db_session, "bulk_item")
 
     with patch.object(WasteService, "validate_waste_data") as mock_validate:
@@ -535,7 +533,7 @@ def test_preference_empty_list(db_session: Session):
     - get_preferences() returns empty list
     """
     user = ProfileService.create_user(
-        db_session, unique_email("emptyprefs"), "Empty Prefs User"
+        db_session, unique_email("sarah"), "Sarah Martinez"
     )
 
     # Add preferences
@@ -566,9 +564,7 @@ def test_allergy_empty_note(db_session: Session):
     - Can create allergy without note
     - Note field is optional
     """
-    user = ProfileService.create_user(
-        db_session, unique_email("nonote"), "No Note User"
-    )
+    user = ProfileService.create_user(db_session, unique_email("raj"), "Raj Patel")
     ing_id = uuid.uuid4()
 
     # Add allergy without note
@@ -586,9 +582,7 @@ def test_pantry_no_expiration(db_session: Session):
     - Can create pantry item without expiration date
     - Non-perishable items don't require expiration
     """
-    user = ProfileService.create_user(
-        db_session, unique_email("noexpiry"), "No Expiry User"
-    )
+    user = ProfileService.create_user(db_session, unique_email("emma"), "Emma Johnson")
     ing = IngredientService.get_or_create_ingredient(db_session, "salt")
 
     with patch.object(PantryService, "validate_ingredient_data") as mock_validate:

@@ -22,7 +22,7 @@ from domain.models import init_database
 from adapters import graph_adapter, mongo_adapter
 
 # Import configuration
-from core.config import settings, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, MONGO_URI, MONGO_DB
+from app.config import settings, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, MONGO_URI, MONGO_DB
 
 # Import middleware
 from api.middleware import (
@@ -33,7 +33,7 @@ from api.middleware import (
     not_found_exception_handler,
     general_exception_handler,
 )
-from core.exceptions import ServiceValidationError, NotFoundError
+from app.exceptions import ServiceValidationError, NotFoundError
 
 # Setup logging with configured level and format
 logging.basicConfig(

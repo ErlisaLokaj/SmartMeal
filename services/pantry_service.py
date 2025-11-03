@@ -8,7 +8,7 @@ from domain.models import PantryItem, AppUser
 from domain.schemas.profile_schemas import PantryItemCreate
 from repositories import IngredientRepository, PantryRepository, UserRepository
 from datetime import datetime, timedelta, date
-from core.exceptions import NotFoundError, ServiceValidationError
+from app.exceptions import NotFoundError, ServiceValidationError
 
 logger = logging.getLogger("smartmeal.pantry")
 
@@ -223,7 +223,9 @@ class PantryService:
         # Validate ingredient exists in Neo4j and get metadata
         meta = PantryService.validate_ingredient_data(item.ingredient_id)
         if meta is None:
-            raise ServiceValidationError(f"Ingredient not found in Neo4j: {item.ingredient_id}")
+            raise ServiceValidationError(
+                f"Ingredient not found in Neo4j: {item.ingredient_id}"
+            )
 
         # Estimate expiry from Neo4j metadata if not provided
         bb = item.best_before

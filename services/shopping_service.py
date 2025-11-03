@@ -22,6 +22,7 @@ from repositories import (
     ShoppingListItemRepository,
     RecipeRepository,
 )
+from app.exceptions import NotFoundError
 
 logger = logging.getLogger("smartmeal.shopping")
 
@@ -255,12 +256,13 @@ class ShoppingService:
         return shopping_list_repo.create(shopping_list)
 
     @staticmethod
-    def get_shopping_list(
-        db: Session, list_id: UUID, user_id: UUID
-    ) -> Optional[ShoppingList]:
+    def get_shopping_list(db: Session, list_id: UUID, user_id: UUID) -> ShoppingList:
         """Get a shopping list by ID (must belong to user)."""
         shopping_repo = ShoppingListRepository(db)
-        return shopping_repo.get_by_id_and_user(list_id, user_id)
+        shopping_list = shopping_repo.get_by_id_and_user(list_id, user_id)
+        if not shopping_list:
+            raise NotFoundError(f"Shopping list not found: {list_id}")
+        return shopping_list
 
     @staticmethod
     def get_user_shopping_lists(
@@ -274,15 +276,22 @@ class ShoppingService:
     def update_item_status(
         db: Session,
         list_item_id: UUID,
+        user_id: UUID,
         checked: Optional[bool] = None,
         note: Optional[str] = None,
-    ) -> Optional[ShoppingListItem]:
+    ) -> ShoppingListItem:
         """Update a shopping list item (check off or add note)."""
         item_repo = ShoppingListItemRepository(db)
         item = item_repo.get_by_id(list_item_id)
 
         if not item:
-            return None
+            raise NotFoundError(f"Shopping list item not found: {list_item_id}")
+
+        # Verify the item belongs to the user's shopping list
+        shopping_repo = ShoppingListRepository(db)
+        shopping_list = shopping_repo.get_by_id(item.list_id)
+        if not shopping_list or shopping_list.user_id != user_id:
+            raise NotFoundError(f"Shopping list item not found: {list_item_id}")
 
         if checked is not None:
             item.checked = checked

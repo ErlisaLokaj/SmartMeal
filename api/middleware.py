@@ -15,7 +15,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
-from core.exceptions import ServiceValidationError, NotFoundError
+from app.exceptions import ServiceValidationError, NotFoundError
 
 logger = logging.getLogger("smartmeal.middleware")
 

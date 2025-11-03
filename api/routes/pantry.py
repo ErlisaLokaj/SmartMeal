@@ -15,7 +15,7 @@ from domain.schemas.profile_schemas import (
     PantryItemQuantityUpdate,
 )
 from services.pantry_service import PantryService
-from core.exceptions import ServiceValidationError, NotFoundError
+from app.exceptions import ServiceValidationError, NotFoundError
 
 router = APIRouter(prefix="/pantry", tags=["Pantry"])
 logger = logging.getLogger("smartmeal.api.pantry")

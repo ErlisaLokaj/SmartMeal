@@ -19,7 +19,7 @@ from domain.schemas.profile_schemas import (
     PreferenceCreate,
 )
 from services.profile_service import ProfileService
-from core.exceptions import NotFoundError
+from app.exceptions import NotFoundError
 from domain.mappers import UserMapper
 
 router = APIRouter(prefix="/profiles", tags=["Profiles"])

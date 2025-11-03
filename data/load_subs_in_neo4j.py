@@ -12,7 +12,7 @@ reduce memory usage.
 import json
 import os
 from pathlib import Path
-from core.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+from app.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 
 try:
     from neo4j import GraphDatabase

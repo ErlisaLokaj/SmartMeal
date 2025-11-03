@@ -21,7 +21,7 @@ from datetime import datetime
 
 from test_fixtures import client, make_user
 from services.profile_service import ProfileService
-from core.exceptions import ServiceValidationError
+from app.exceptions import ServiceValidationError
 
 
 # =============================================================================
@@ -282,14 +282,14 @@ def test_dietary_get_set(monkeypatch):
     - fat_target_g: 70.0
     """
     user = make_user()
-    # Create a fake dietary profile object
+    # Create a realistic dietary profile (maintenance goal, moderate activity)
     dp = SimpleNamespace(
         goal="maintenance",
         activity="moderate",
         kcal_target=2000,
-        protein_target_g=100.0,
-        carb_target_g=250.0,
-        fat_target_g=70.0,
+        protein_target_g=100.0,  # Realistic: 0.5g per lb body weight
+        carb_target_g=250.0,  # Realistic: 50% of calories
+        fat_target_g=70.0,  # Realistic: 30% of calories
         cuisine_likes="[]",
         cuisine_dislikes="[]",
         updated_at=datetime.utcnow(),
@@ -421,4 +421,3 @@ if __name__ == "__main__":
     print(EXAMPLE_USER_FLOW)
     print("\n" + "=" * 70 + "\n")
     print(EXAMPLE_DIETARY_FLOW)
-
