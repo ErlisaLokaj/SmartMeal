@@ -44,7 +44,7 @@ class MealEntry(Base):
     )
     day = Column(Date)
     slot = Column(Text)  # breakfast, lunch, dinner, snack
-    recipe_id = Column(UUID(as_uuid=True))
+    recipe_id = Column(Text)  # MongoDB ObjectId stored as string
     servings = Column(Numeric)
     notes = Column(Text)
 
@@ -67,7 +67,7 @@ class MealEntryRecipeSnapshot(Base):
         ForeignKey("meal_entry.meal_entry_id", ondelete="CASCADE"),
         primary_key=True,
     )
-    base_recipe_id = Column(UUID(as_uuid=True))
+    base_recipe_id = Column(Text)  # MongoDB ObjectId stored as string
     ingredients = Column(Text)  # JSON stored as text
     steps = Column(Text)
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
@@ -111,7 +111,7 @@ class ShoppingListItem(Base):
     needed_qty = Column(Numeric)
     unit = Column(Text)
     checked = Column(Boolean, default=False)
-    from_recipe_id = Column(UUID(as_uuid=True), nullable=True)
+    from_recipe_id = Column(Text, nullable=True)  # MongoDB ObjectId stored as string
     note = Column(Text)
 
     list = relationship("ShoppingList", back_populates="items")
@@ -128,7 +128,7 @@ class CookingLog(Base):
         ForeignKey("app_user.user_id", ondelete="CASCADE"),
         nullable=False,
     )
-    recipe_id = Column(UUID(as_uuid=True))
+    recipe_id = Column(Text)  # MongoDB ObjectId stored as string
     cooked_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     servings = Column(Numeric)
 

@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -15,6 +16,30 @@ class CookingLogRepository(BaseRepository[CookingLog]):
 
     def __init__(self, db: Session):
         super().__init__(db, CookingLog)
+
+    def create_cooking_log(
+        self, user_id: UUID, recipe_id: str, servings: int
+    ) -> CookingLog:
+        """
+        Create a new cooking log entry.
+
+        Args:
+            user_id: User's UUID
+            recipe_id: Recipe ID (string from MongoDB)
+            servings: Number of servings cooked
+
+        Returns:
+            Created CookingLog instance
+        """
+        cooking_log = CookingLog(
+            user_id=user_id,
+            recipe_id=recipe_id,
+            servings=Decimal(str(servings)),
+        )
+        self.db.add(cooking_log)
+        self.db.commit()
+        self.db.refresh(cooking_log)
+        return cooking_log
 
     def get_recent_logs(self, user_id: UUID, days: int = 7) -> List[CookingLog]:
         """Get cooking logs for a user within the specified number of days"""

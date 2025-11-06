@@ -15,14 +15,32 @@ import inspect
 from typing import Optional
 
 # Import routes from new structure
-from api.routes import users, profiles, pantry, waste, health, recipes, recommendations, shopping
+from api.routes import (
+    users,
+    profiles,
+    pantry,
+    waste,
+    health,
+    recipes,
+    recommendations,
+    shopping,
+    cook,
+    save_me_first,
+)
 
 # Import database and adapters
 from domain.models import init_database
 from adapters import graph_adapter, mongo_adapter
 
 # Import configuration
-from app.config import settings, NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD, MONGO_URI, MONGO_DB
+from app.config import (
+    settings,
+    NEO4J_URI,
+    NEO4J_USER,
+    NEO4J_PASSWORD,
+    MONGO_URI,
+    MONGO_DB,
+)
 
 # Import middleware
 from api.middleware import (
@@ -108,7 +126,7 @@ async def lifespan(app: FastAPI):
             _logger.info("Neo4j connection closed")
         except Exception as e:
             _logger.exception("Error closing Neo4j adapter during shutdown: %s", e)
-        
+
         try:
             mongo_adapter.close()
             _logger.info("MongoDB connection closed")
@@ -154,6 +172,8 @@ app.include_router(users.router, prefix=settings.api_prefix)
 app.include_router(profiles.router, prefix=settings.api_prefix)
 app.include_router(pantry.router, prefix=settings.api_prefix)
 app.include_router(waste.router, prefix=settings.api_prefix)
+app.include_router(cook.router, prefix=settings.api_prefix)
+app.include_router(save_me_first.router, prefix=settings.api_prefix)
 app.include_router(health.router, prefix=settings.api_prefix)
 app.include_router(recipes.router, prefix=settings.api_prefix)
 app.include_router(recommendations.router, prefix=settings.api_prefix)
