@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Dict, List, Tuple
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 from adapters.mongo_adapter import search_recipes as mongo_search_recipes
 from adapters.sql_adapter import get_user_allergy_ingredient_ids
 from services.recipe_service import get_recipe_by_id
 from adapters.graph_adapter import check_conflicts as neo_check_conflicts, choose_substitute_for
+from repositories.plan_repository import PlanRepository
 
 
 logger = logging.getLogger("smartmeal.planner")
@@ -38,50 +38,7 @@ class PlannerService:
 
     def __init__(self, db: Session):
         self.db: Session = db
-
-    def _user_exists(self, user_id: uuid.UUID) -> bool:
-        sql = "SELECT 1 FROM app_user WHERE user_id = :uid LIMIT 1"
-        row = self.db.execute(text(sql), {"uid": str(user_id)}).first()
-        return bool(row)
-
-    def _load_pantry(self, user_id: uuid.UUID) -> List[Dict[str, Any]]:
-        sql = """
-        SELECT ingredient_id::text AS ingredient_id, quantity, unit, best_before
-        FROM pantry_item
-        WHERE user_id = :uid
-        """
-        rows = self.db.execute(text(sql), {"uid": str(user_id)}).mappings().all()
-        return [dict(r) for r in rows]
-
-    def _insert_meal_plan(self, user_id: uuid.UUID, starts_on: date, ends_on: date) -> uuid.UUID:
-        """
-        Table: meal_plan(plan_id uuid pk, user_id uuid, starts_on date, ends_on date, title text null, created_at timestamptz default now())
-        """
-        plan_id = uuid.uuid4()
-        sql = """
-        INSERT INTO meal_plan (plan_id, user_id, starts_on, ends_on)
-        VALUES (:pid, :uid, :start_on, :end_on)
-        """
-        self.db.execute(
-            text(sql),
-            {"pid": str(plan_id), "uid": str(user_id), "start_on": starts_on, "end_on": ends_on},
-        )
-        return plan_id
-
-    def _insert_meal_entry(self, plan_id: uuid.UUID, day_idx: int, recipe_id: str, servings: int = 2) -> None:
-        """
-        Table: meal_entry(meal_entry_id uuid pk default gen_random_uuid(),
-                            plan_id uuid fk -> meal_plan.plan_id,
-                            recipe_id text, day_index int, servings int, created_at timestamptz default now())
-        """
-        sql = """
-        INSERT INTO meal_entry (plan_id, recipe_id, day_index, servings)
-        VALUES (:pid, :rid, :dix, :srv)
-        """
-        self.db.execute(
-            text(sql),
-            {"pid": str(plan_id), "rid": str(recipe_id), "dix": day_idx, "srv": servings},
-        )
+        self.repository = PlanRepository(db)
 
     # ---------- candidate fetch ----------
 
@@ -185,13 +142,13 @@ class PlannerService:
     # ---------- main ----------
 
     def generate_plan(self, req: PlanRequest) -> uuid.UUID:
-        if not self._user_exists(req.user_id):
+        if not self.repository.user_exists(req.user_id):
             raise ValueError(f"User {req.user_id} not found")
 
         ws = req.week_start - timedelta(days=req.week_start.weekday())
         we = ws + timedelta(days=max(req.days, 1) - 1)
 
-        pantry = self._load_pantry(req.user_id)
+        pantry = self.repository.load_pantry(req.user_id)
         pantry_ids: set[str] = {str(p["ingredient_id"]) for p in pantry if p.get("ingredient_id")}
         allergen_ids: set[str] = set(map(str, get_user_allergy_ingredient_ids(str(req.user_id)) or []))
 
@@ -276,11 +233,11 @@ class PlannerService:
 
         logger.info("Selected %d recipes for plan (requested: %d)", len(picks), req.days)
 
-        plan_id = self._insert_meal_plan(req.user_id, ws, we)
+        plan_id = self.repository.insert_meal_plan(req.user_id, ws, we)
         for i, rid in enumerate(picks):
-            self._insert_meal_entry(plan_id, i, rid, servings=2)
+            self.repository.insert_meal_entry(plan_id, i, rid, servings=1)
 
-        self.db.commit()
+        self.repository.commit()
 
         logger.info("Generated plan %s for user %s with %d entries", plan_id, req.user_id, len(picks))
         return plan_id
@@ -288,31 +245,7 @@ class PlannerService:
     # ---------- queries for API ----------
 
     def list_user_plans(self, user_id: uuid.UUID):
-        sql = """
-        SELECT
-          mp.plan_id                       AS plan_id,
-          mp.user_id                       AS user_id,
-          mp.starts_on                     AS week_start,
-          COUNT(me.meal_entry_id)::int     AS days
-        FROM meal_plan mp
-        LEFT JOIN meal_entry me ON me.plan_id = mp.plan_id
-        WHERE mp.user_id = :uid
-        GROUP BY mp.plan_id, mp.user_id, mp.starts_on
-        ORDER BY mp.starts_on DESC
-        """
-        rows = self.db.execute(text(sql), {"uid": str(user_id)}).mappings().all()
-        return [dict(r) for r in rows]
+        return self.repository.list_user_plans(user_id)
 
     def get_plan_entries(self, plan_id: uuid.UUID):
-        sql = """
-        SELECT
-          meal_entry_id,
-          recipe_id::text AS recipe_id,
-          day_index,
-          servings
-        FROM meal_entry
-        WHERE plan_id = :pid
-        ORDER BY day_index
-        """
-        rows = self.db.execute(text(sql), {"pid": str(plan_id)}).mappings().all()
-        return [dict(r) for r in rows]
+        return self.repository.get_plan_entries(plan_id)
