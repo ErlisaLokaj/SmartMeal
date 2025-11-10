@@ -15,7 +15,7 @@ import inspect
 from typing import Optional
 
 # Import routes from new structure
-from api.routes import users, profiles, pantry, waste, health, recipes, recommendations, shopping
+from api.routes import users, profiles, pantry, waste, health, recipes, recommendations, shopping, plans
 
 # Import database and adapters
 from domain.models import init_database
@@ -158,6 +158,7 @@ app.include_router(health.router, prefix=settings.api_prefix)
 app.include_router(recipes.router, prefix=settings.api_prefix)
 app.include_router(recommendations.router, prefix=settings.api_prefix)
 app.include_router(shopping.router, prefix=settings.api_prefix)
+app.include_router(plans.router, prefix=settings.api_prefix)
 
 
 if __name__ == "__main__":

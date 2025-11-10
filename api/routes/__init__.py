@@ -1,5 +1,5 @@
 """API routes package"""
 
-from . import users, profiles, pantry, waste, health
+from . import users, profiles, pantry, waste, health, plans
 
-__all__ = ["users", "profiles", "pantry", "waste", "health"]
+__all__ = ["users", "profiles", "pantry", "waste", "health", "plans"]
