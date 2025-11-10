@@ -297,3 +297,46 @@ def get_disallowed_ingredient_ids(allergy_names):
     except Exception as e:
         logger.exception("Error getting disallowed ingredients for allergies")
         raise RuntimeError(f"Failed to get disallowed ingredients: {str(e)}") from e
+
+# --- NEW: проверки конфликтов + выбор замены ---
+
+from typing import List, Tuple, Optional, Set
+
+def check_conflicts(ingredient_ids: List[str], user_id: str) -> dict[str, list[str]]:
+    if _driver is None:
+        return {}
+
+    cypher = """
+    MATCH (i:Ingredient)
+    WHERE i.id IN $ids
+    OPTIONAL MATCH (i)-[:CONFLICTS_WITH]->(x)
+    WITH i, collect(coalesce(x.name, x.id)) AS direct_reasons
+    OPTIONAL MATCH (u:User {id: $uid})-[:HAS_RULE]->(r:Rule)<-[:CONFLICTS_WITH]-(i2:Ingredient {id: i.id})
+    WITH i, direct_reasons + collect(coalesce(r.name, r.id)) AS all_reasons
+    WITH i, [r IN all_reasons WHERE r IS NOT NULL] AS reasons
+    WHERE size(reasons) > 0
+    RETURN i.id AS ingredient_id, reasons
+    """
+    try:
+        with _driver.session() as session:
+            rows = session.run(cypher, ids=[str(x) for x in ingredient_ids], uid=str(user_id))
+            out: dict[str, list[str]] = {}
+            for r in rows:
+                out[str(r["ingredient_id"])] = [str(x) for x in (r["reasons"] or [])]
+            return out
+    except Exception as e:
+        logger.warning("Neo4j conflict query failed: %s", e)
+        return {}
+
+
+def choose_substitute_for(ingredient_id: str, disallowed_ids: Set[str], limit: int = 5) -> Optional[str]:
+    try:
+        subs = suggest_substitutes(ingredient_id, limit=limit) or []
+    except Exception as e:
+        logger.warning("Substitute query failed for %s: %s", ingredient_id, e)
+        return None
+
+    for sid in subs:
+        if sid and str(sid) not in disallowed_ids:
+            return str(sid)
+    return None

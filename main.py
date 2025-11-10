@@ -26,7 +26,9 @@ from api.routes import (
     shopping,
     cook,
     save_me_first,
+    plans,
 )
+
 
 # Import database and adapters
 from domain.models import init_database
@@ -178,6 +180,7 @@ app.include_router(health.router, prefix=settings.api_prefix)
 app.include_router(recipes.router, prefix=settings.api_prefix)
 app.include_router(recommendations.router, prefix=settings.api_prefix)
 app.include_router(shopping.router, prefix=settings.api_prefix)
+app.include_router(plans.router, prefix=settings.api_prefix)
 
 
 if __name__ == "__main__":
