@@ -485,37 +485,277 @@ C --> FE: recommendations
 
 ' ---------- (8) Cook Recipe (Auto-Decrement) ----------
 @startuml Cook Recipe
-title Cook Recipe → Auto-decrement Pantry
+title Cook Recipe → Auto-decrement Pantry (with Validation & Feedback)
 autonumber
 actor User
 participant "Frontend" as FE
 participant "Controller" as C
-participant "PantryService" as P
+participant "CookingService" as CS
+participant "RecipeService" as RS
+participant "PantryService" as PS
 database "PostgreSQL" as PG
 database "MongoDB" as MG
+database "Neo4j" as NJ
 
-User -> FE: Mark recipe cooked (servings)
-FE -> C: POST /cook {recipe_id, servings}
-C -> P: processCook(userId, recipe_id, servings)
-
-P -> MG: getRecipe(recipe_id)
-MG --> P: ingredients list
-
-P -> PG: beginTx()
-loop for each ingredient
-  P -> PG: SELECT ... FOR UPDATE\n(by user_id, ingredient_id, unit)
-  alt row exists
-    P -> PG: UPDATE pantry_item\nSET quantity = GREATEST(quantity - req, 0)
-  else no row
-    note right: no-op (no shortage persisted)
+== Mark Recipe as Cooked ==
+User -> FE: Cook recipe {recipe_id, servings}
+FE -> C: POST /cook {user_id, recipe_id, servings}
+C -> C: validate payload (Pydantic: servings > 0)
+alt invalid schema
+  C --> FE: 422 Unprocessable Entity
+else valid
+  C -> CS: cook_recipe(user_id, recipe_id, servings)
+  
+  ' Step 1: User Validation
+  CS -> PG: verify user exists
+  alt user not found
+    PG --> CS: no rows
+    CS --> C: NotFoundError
+    C --> FE: 404 User Not Found
+  else user exists
+    PG --> CS: user row
+    
+    ' Step 2: Recipe Retrieval
+    CS -> RS: get_recipe_by_id(recipe_id)
+    RS -> MG: _get_db()
+    alt MongoDB not available
+      MG --> RS: None
+      RS --> CS: None
+      CS --> C: ServiceValidationError("Recipe service unavailable")
+      C --> FE: 503 Service Unavailable
+    else MongoDB connected
+      MG --> RS: database connection
+      RS -> MG: recipes.findOne({"_id": recipe_id})
+      alt recipe not found
+        MG --> RS: None
+        RS --> CS: None
+        CS --> C: NotFoundError("Recipe not found")
+        C --> FE: 404 Recipe Not Found
+      else recipe found
+        MG --> RS: recipe document
+        RS --> CS: recipe {name, ingredients[], nutrition, cuisine, ...}
+        
+        ' Step 3: Recipe Validation (Allergies)
+        CS -> PG: get_user_allergies(user_id)
+        PG --> CS: allergen_ingredient_ids[]
+        
+        CS -> CS: check recipe ingredients against allergies
+        alt recipe contains allergens
+          CS --> C: ServiceValidationError("Recipe contains allergens: [ids]")
+          C --> FE: 400 Bad Request (allergy conflict)
+        else no allergen conflicts
+          
+          ' Step 4: Ingredient Batch Validation
+          CS -> CS: extract unique ingredient_ids from recipe
+          CS -> NJ: validate_ingredients_batch(ingredient_ids[])
+          alt Neo4j not connected
+            NJ --> CS: RuntimeError("Neo4j not initialized")
+            CS --> C: ServiceValidationError("Cannot validate ingredients")
+            C --> FE: 400 Bad Request (Neo4j unavailable)
+          else all ingredients validated
+            NJ --> CS: ingredient_metadata_map {id: {name, category, unit}}
+            
+            ' Step 5: STRICT Pantry Availability Check (BLOCKING)
+            CS -> CS: _check_pantry_availability(recipe, servings)
+            note right: **STRICT CHECK**\nRead-only validation\nBlocks cooking if ANY ingredient missing
+            
+            loop for each ingredient in recipe
+              CS -> PG: SELECT * FROM pantry_item\nWHERE user_id = :user_id\nAND ingredient_id = :ingredient_id\nAND unit = :unit
+              note right: Calculate total available stock
+              
+              PG --> CS: pantry_items[]
+              CS -> CS: sum available quantities
+              CS -> CS: compare with required quantity
+              
+              alt insufficient stock
+                CS -> CS: add to shortages list:\n{ingredient_id, name, needed, available, deficit}
+                note right: Track ALL shortages before failing
+              end
+            end
+            
+            alt ANY shortages detected
+              CS --> C: ServiceValidationError(\n  "Cannot cook: Missing ingredients in pantry"\n  + list of shortages\n)
+              C --> FE: 400 Bad Request\n{\n  "error": "Missing ingredients",\n  "shortages": [...],\n  "suggestion": "Generate shopping list first"\n}
+              note right: **COOKING BLOCKED**\nUser must:\n1. Get shopping list\n2. Buy ingredients\n3. Add to pantry\n4. Then try cooking again
+            else all ingredients available
+              
+              ' Step 6: Pantry Decrement (FIFO)
+              CS -> PG: begin transaction
+              
+              CS -> CS: scale ingredient quantities by servings
+              
+              loop for each ingredient in recipe
+                CS -> PG: SELECT * FROM pantry_item\nWHERE user_id = :user_id\nAND ingredient_id = :ingredient_id\nAND unit = :unit\nORDER BY best_before ASC\nFOR UPDATE
+                note right: FIFO: consume oldest items first\nBatch-aware: handles multiple expiry dates
+                
+                PG --> CS: pantry_items[] (ordered by expiry)
+                
+                loop consume from pantry items (FIFO)
+                  CS -> CS: calculate to_decrement = min(available, remaining_needed)
+                  
+                  alt item fully consumed
+                    CS -> PG: DELETE pantry_item\nWHERE pantry_item_id = :id
+                    note right: Auto-remove when quantity reaches 0
+                    PG --> CS: deleted
+                  else item partially consumed
+                    CS -> PG: UPDATE pantry_item\nSET quantity = quantity - :to_decrement\nWHERE pantry_item_id = :id
+                    PG --> CS: updated row
+                  end
+                end
+              end
+              
+              ' Step 7: Cooking Log
+              CS -> PG: INSERT INTO cooking_log\n(user_id, recipe_id, servings, cooked_at)\nVALUES (...)
+              PG --> CS: cooking_log row
+              
+              CS -> PG: commit transaction
+              
+              ' Step 8: Generate Enhanced Response
+              CS -> CS: build response with:\n- Recipe details (name, servings)\n- Pantry update status\n- Nutritional summary\n- Waste prevention tips\n- Personalized suggestions
+              
+              CS -> CS: calculate nutrition per serving from recipe data
+              CS -> CS: generate contextual tips based on cuisine
+              
+              CS --> C: CookRecipeResponse {\n  success: true,\n  message: "Successfully cooked X for Y servings",\n  recipe_name,\n  servings,\n  pantry_updated: true,\n  shortages: [],\n  nutritional_summary: {calories, protein, carbs, fat},\n  waste_prevention_tips: [],\n  suggestions: []\n}
+              
+              C --> FE: 200 OK + cooking success
+            end
+          end
+        end
+      end
+    end
   end
 end
-P -> PG: insert cooking_log
-P -> PG: commitTx()
 
-P --> C: ok
-C --> FE: Pantry updated
+note over CS
+  **STRICT COOKING POLICY**
+  • MUST have ALL ingredients before cooking
+  • Pre-check blocks cooking if any shortage
+  • No partial cooking allowed
+  • Forces proper planning workflow
+end note
+
+note over CS
+  **Cooking Service Responsibilities**
+  • User validation
+  • Recipe retrieval & validation
+  • Allergy conflict detection
+  • Ingredient batch validation
+  • FIFO pantry decrement
+  • Cooking log creation
+  • Enhanced response generation
+end note
+
+note over PG
+  **FIFO Pantry Management**
+  • ORDER BY best_before ASC (oldest first)
+  • SELECT FOR UPDATE (transaction safety)
+  • Auto-delete when quantity = 0
+  • Batch-level tracking (separate rows per expiry)
+  • Handles shortages gracefully
+end note
+
+note over CS
+  **Error Handling**
+  • Strict validation (no fake data)
+  • Graceful degradation for service outages
+  • Comprehensive error messages
+  • Transaction rollback on failure
+  • All validations before DB changes
+end note
+
+note over CS
+  **Enhanced User Feedback**
+  • Recipe name & details
+  • Nutritional info per serving
+  • Pantry shortage warnings
+  • Waste prevention tips
+  • Personalized suggestions
+  • Shopping recommendations
+end note
+
+== Get Cooking History ==
+User -> FE: View cooking history
+FE -> C: GET /cook/history?user_id={id}&days={7}
+C -> CS: get_cooking_history(user_id, days)
+
+CS -> PG: SELECT * FROM cooking_log\nWHERE user_id = :user_id\nAND cooked_at >= (now() - :days)\nORDER BY cooked_at DESC
+PG --> CS: cooking_logs[]
+
+loop for each log
+  CS -> MG: get_recipe_by_id(log.recipe_id)
+  MG --> CS: recipe {name, cuisine}
+  CS -> CS: enrich log with recipe details
+end
+
+CS --> C: CookingHistoryResponse[]
+C --> FE: 200 OK + cooking history
+
+== Generate Recipe Shopping List ==
+User -> FE: Select recipe to cook
+FE -> C: POST /cook/shopping-list {user_id, recipe_id, servings}
+C -> CS: generate_recipe_shopping_list(user_id, recipe_id, servings)
+
+CS -> PG: verify user exists
+alt user not found
+  PG --> CS: no rows
+  CS --> C: NotFoundError
+  C --> FE: 404 User Not Found
+else user exists
+  PG --> CS: user row
+  
+  CS -> MG: get_recipe_by_id(recipe_id)
+  alt recipe not found
+    MG --> CS: None
+    CS --> C: NotFoundError
+    C --> FE: 404 Recipe Not Found
+  else recipe found
+    MG --> CS: recipe {name, ingredients[]}
+    
+    CS -> NJ: validate_ingredients_batch(ingredient_ids[])
+    NJ --> CS: ingredient_metadata_map
+    
+    CS -> CS: scale quantities by servings
+    
+    loop for each ingredient
+      CS -> PG: SELECT * FROM pantry_item\nWHERE user_id = :user_id\nAND ingredient_id = :ingredient_id
+      note right: Check current stock\n(read-only, no update)
+      
+      PG --> CS: pantry_items[]
+      CS -> CS: sum available quantity
+      CS -> CS: calculate: to_buy = needed - available
+      
+      alt available < needed
+        CS -> CS: add to missing_items:\n{ingredient_id, name, needed,\navailable, to_buy, unit}
+      end
+    end
+    
+    CS -> CS: has_all = (missing_items.length == 0)
+    CS -> CS: can_cook_now = has_all
+    
+    CS --> C: RecipeShoppingListResponse {\n  recipe_id, recipe_name, servings,\n  missing_items: [],\n  has_all_ingredients: bool,\n  total_items_needed: int,\n  can_cook_now: bool\n}
+    
+    alt has_all_ingredients == false
+      C --> FE: 200 OK + shopping list
+      note right: User must:\n1. Shop for missing items\n2. Add to pantry\n3. Then can cook
+    else has_all_ingredients == true
+      C --> FE: 200 OK + empty list
+      note right: Can cook immediately!\nNo shopping needed
+    end
+  end
+end
+
+note over CS
+  **Recipe Shopping List**
+  • Pre-cooking planning tool
+  • Shows what to buy
+  • Read-only pantry check
+  • Helps user prepare
+  • Ensures cooking success
+end note
+
 @enduml
+
 
 
 ' ---------- (9) Waste Logging & Insights ----------
@@ -640,34 +880,159 @@ end
 
 
 ' ---------- (10) Save-me-first Suggestions ----------
-@startuml Daily Save-me-first Suggestions
-title Daily Save-me-first Suggestions (Food-waste Minimizer)
+@startuml Save-me-first Suggestions (Food Waste Prevention)
+title Save-me-first Suggestions - Prevent Food Waste with Smart Recipe Recommendations
 autonumber
-actor "Scheduler" as CRON
+actor User
+participant "Frontend" as FE
 participant "Controller" as C
-participant "WasteService" as W
+participant "SaveMeFirstService" as SMF
+participant "PantryService" as PS
+participant "RecipeService" as RS
 database "PostgreSQL" as PG
 database "MongoDB" as MG
 database "Neo4j" as NJ
-participant "Notifier" as NTF
 
-CRON -> C: triggerDailySaveMeFirst()
-C -> W: buildSaveMeFirst(userId)
-
-W -> PG: getExpiringPantry(userId, 3d)
-PG --> W: expiring items
-
-loop for each expiring ingredient
-  W -> NJ: findRecipesUsing(ingredient_id)
-  NJ --> W: candidate ingredient sets
-  W -> MG: fetchRecipes(candidateRecipeIds)
-  MG --> W: recipes
+== User Requests Waste Prevention Suggestions ==
+User -> FE: Open Save-me-first dashboard
+FE -> C: GET /save-me-first?days_threshold=3&max_suggestions=5
+C -> C: validate query params (1-14 days, 1-20 suggestions)
+alt invalid params
+  C --> FE: 400 Bad Request {error details}
+else valid
+  C -> SMF: generate_suggestions(user_id, days_threshold, max_suggestions)
+  
+  == Step 1: Verify User ==
+  SMF -> PG: SELECT * FROM app_user WHERE user_id = :id
+  alt user not found
+    PG --> SMF: no rows
+    SMF --> C: NotFoundError
+    C --> FE: 404 Not Found
+  else user exists
+    PG --> SMF: user data
+    
+    == Step 2: Get Expiring Pantry Items ==
+    SMF -> PS: get_expiring_soon(user_id, days_threshold)
+    PS -> PG: <<FIFO query>>\nSELECT * FROM pantry_item\nWHERE user_id = :id\nAND best_before BETWEEN NOW() AND NOW() + :days\nORDER BY best_before ASC
+    PG --> PS: raw pantry items
+    PS --> SMF: expiring_items_raw[]
+    
+    alt no expiring items
+      SMF -> SMF: return empty response with general tips
+      SMF --> C: SaveMeFirstResponse(total_expiring=0, tips=[general])
+      C --> FE: 200 OK {no items, general tips}
+    else has expiring items
+      
+      == Step 3: Enrich with Ingredient Metadata ==
+      SMF -> SMF: extract ingredient_ids from pantry items
+      SMF -> NJ: get_ingredients_batch([ingredient_ids])
+      NJ -> NJ: MATCH (i:Ingredient)\nWHERE i.ingredient_id IN :ids\nRETURN i.ingredient_id, i.name, i.category
+      NJ --> SMF: ingredient_metadata_map
+      
+      SMF -> SMF: for each pantry item:\n  - calculate days_until_expiry\n  - assign urgency_level:\n    * critical: < 1 day\n    * urgent: 1-2 days\n    * soon: > 2 days\n  - attach ingredient_name from metadata
+      SMF -> SMF: sort by urgency, then days_until_expiry
+      SMF -> SMF: count by urgency (critical_count, urgent_count)
+      note right: ExpiringIngredient[] created
+      
+      == Step 4: Find Matching Recipes ==
+      SMF -> PG: get_by_user_id(user_id) -- full pantry
+      PG --> SMF: all_pantry_items[]
+      SMF -> SMF: create pantry_ingredient_ids set
+      
+      ' Search strategy: prioritize by urgency
+      SMF -> SMF: extract critical_ingredient_ids
+      alt has critical ingredients
+        SMF -> RS: search_recipes(user_id, include_ingredient_ids=critical_ids[:3])
+        RS -> MG: db.recipes.find({ingredients.ingredient_id: {$in: critical_ids}})
+        RS -> PG: check user allergies, preferences
+        MG --> RS: recipes[]
+        RS --> SMF: critical_recipes[]
+      end
+      
+      SMF -> SMF: extract urgent + critical ingredient_ids
+      alt need more recipes
+        SMF -> RS: search_recipes(user_id, include_ingredient_ids=urgent_ids[:5])
+        RS -> MG: db.recipes.find({ingredients.ingredient_id: {$in: urgent_ids}})
+        MG --> RS: recipes[]
+        RS --> SMF: urgent_recipes[]
+      end
+      
+      alt still need more recipes
+        SMF -> RS: search_recipes(user_id, include_ingredient_ids=all_expiring[:10])
+        RS -> MG: db.recipes.find({ingredients.ingredient_id: {$in: expiring_ids}})
+        MG --> RS: recipes[]
+        RS --> SMF: more_recipes[]
+      end
+      
+      == Step 5: Score and Rank Recipes ==
+      SMF -> SMF: combine all recipes (deduplicate by recipe_id)
+      
+      loop for each recipe
+        SMF -> SMF: extract recipe_ingredient_ids
+        SMF -> SMF: calculate uses_expiring = recipe_ids ∩ expiring_ids
+        alt uses_expiring_count == 0
+          SMF -> SMF: skip recipe (doesn't use expiring items)
+        else uses expiring ingredients
+          SMF -> SMF: calculate missing_ingredients = recipe_ids - pantry_ids
+          SMF -> SMF: can_cook_now = (missing_count == 0)
+          
+          SMF -> SMF: calculate_match_score():\n  - base: (uses_expiring / total_ingredients) * 100\n  - bonus +20 if can_cook_now\n  - max 100
+          
+          SMF -> SMF: calculate_urgency_score():\n  - sum urgency weights for used ingredients:\n    * critical: 100 pts\n    * urgent: 60 pts\n    * soon: 30 pts\n  - average, max 100
+          
+          SMF -> SMF: estimate_effort(recipe):\n  - easy: <= 30 min, <= 7 ingredients\n  - medium: <= 60 min, <= 12 ingredients\n  - hard: otherwise
+          
+          SMF -> SMF: create RecipeSuggestion with scores
+          note right: Stores recipe_id, name, cuisine,\ntotal_time, servings,\nuses_expiring_count,\nexpiring_ingredients_used[],\nmatch_score, urgency_score,\neffort_level, missing_count,\ncan_cook_now
+        end
+      end
+      
+      SMF -> SMF: sort recipes by:\n  1. Combined score (urgency * 0.6 + match * 0.4) DESC\n  2. can_cook_now first\n  3. missing_count ASC
+      SMF -> SMF: take top max_suggestions recipes
+      
+      == Step 6: Generate Personalized Tips ==
+      SMF -> SMF: generate_tips(expiring_ingredients, recipe_suggestions)
+      alt has critical items
+        SMF -> SMF: add urgent warning:\n  "⚠️ URGENT: {names} expiring today! Use or freeze."
+      end
+      
+      alt has cookable recipes
+        SMF -> SMF: add suggestion:\n  "✨ You can cook '{recipe}' right now!"
+      else has recipes but missing items
+        SMF -> SMF: add suggestion:\n  "📝 Shop a few items to cook '{recipe}'"
+      end
+      
+      alt many expiring items (>= 5)
+        SMF -> SMF: add tip: "💡 Freeze items you can't use immediately"
+      end
+      
+      alt no recipe matches
+        SMF -> SMF: add tip: "🥗 Make a stir-fry or soup with expiring items"
+      end
+      
+      SMF -> SMF: always add: "📅 Check pantry regularly"
+      
+      == Step 7: Return Response ==
+      SMF -> SMF: create SaveMeFirstResponse:\n  - user_id\n  - generated_at (ISO timestamp)\n  - expiring_ingredients[]\n  - recipe_suggestions[]\n  - total_expiring\n  - critical_count, urgent_count\n  - tips[]
+      
+      SMF --> C: SaveMeFirstResponse
+      C --> FE: 200 OK {\n  expiring_ingredients: [...],\n  recipe_suggestions: [...],\n  total_expiring: N,\n  critical_count: X,\n  urgent_count: Y,\n  tips: [...]\n}
+    end
+  end
 end
 
-W -> PG: getUserConstraints(userId)
-PG --> W: constraints
-W -> W: rank by expiry urgency + fit + effort
-W -> NTF: sendSuggestion(userId, topK)
-NTF --> C: delivered
-C --> CRON: done
+== User Takes Action ==
+alt user selects recipe
+  User -> FE: Click "Cook This Recipe"
+  FE -> C: redirect to /cook or /cook/shopping-list
+  note right: Integrates with Use Case 8\n(Cook Recipe) or Recipe\nShopping List feature
+else user dismisses
+  User -> FE: Mark as "Not Interested" / Dismiss
+  note right: Optional: could track\ndismissals for future\nranking improvements
+else user freezes items
+  User -> FE: Mark items as frozen
+  FE -> C: PATCH /pantry/{item_id} {location: "freezer"}
+  note right: Extends shelf life,\nremoves from expiring list
+end
+
 @enduml

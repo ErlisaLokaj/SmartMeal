@@ -25,6 +25,15 @@ from domain.schemas.waste_schemas import (
     WasteByCategory,
     WasteTrend,
 )
+from domain.schemas.cooking_schemas import (
+    CookRecipeRequest,
+    CookRecipeResponse,
+    IngredientShortage,
+    NutritionalSummary,
+    CookingLogEntry,
+    CookingHistoryResponse,
+    CookingStatsResponse,
+)
 
 __all__ = [
     # Profile schemas
@@ -49,4 +58,12 @@ __all__ = [
     "WasteByIngredient",
     "WasteByCategory",
     "WasteTrend",
+    # Cooking schemas
+    "CookRecipeRequest",
+    "CookRecipeResponse",
+    "IngredientShortage",
+    "NutritionalSummary",
+    "CookingLogEntry",
+    "CookingHistoryResponse",
+    "CookingStatsResponse",
 ]
