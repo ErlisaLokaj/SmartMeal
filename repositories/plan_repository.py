@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, timedelta
 from typing import Any, Dict, List
 
 from sqlalchemy import text
@@ -16,6 +16,8 @@ class PlanRepository:
 
     def __init__(self, db: Session):
         self.db: Session = db
+
+    # ---------- user & pantry ----------
 
     def user_exists(self, user_id: uuid.UUID) -> bool:
         """Check if a user exists in the database."""
@@ -33,12 +35,14 @@ class PlanRepository:
         rows = self.db.execute(text(sql), {"uid": str(user_id)}).mappings().all()
         return [dict(r) for r in rows]
 
+    # ---------- insertions ----------
+
     def insert_meal_plan(self, user_id: uuid.UUID, starts_on: date, ends_on: date) -> uuid.UUID:
         """
         Create a new meal plan record.
 
         Table: meal_plan(plan_id uuid pk, user_id uuid, starts_on date, ends_on date,
-                        title text null, created_at timestamptz default now())
+                         title text null, created_at timestamptz default now())
         """
         plan_id = uuid.uuid4()
         sql = """
@@ -51,23 +55,33 @@ class PlanRepository:
         )
         return plan_id
 
-    def insert_meal_entry(self, plan_id: uuid.UUID, day_idx: int, recipe_id: str, servings: int = 2) -> None:
-        """
-        Create a new meal entry for a plan.
+    def insert_meal_entry(
+            self,
+            plan_id: uuid.UUID,
+            day_index: int,
+            recipe_id: str,
+            servings: int = 1,
+            week_start: date | None = None,
+    ) -> None:
+        meal_entry_id = uuid.uuid4()
+        day_value = week_start + timedelta(days=day_index) if week_start else None
 
-        Table: meal_entry(meal_entry_id uuid pk default gen_random_uuid(),
-                         plan_id uuid fk -> meal_plan.plan_id,
-                         recipe_id text, day_index int, servings int,
-                         created_at timestamptz default now())
-        """
         sql = """
-        INSERT INTO meal_entry (plan_id, recipe_id, day_index, servings)
-        VALUES (:pid, :rid, :dix, :srv)
-        """
+              INSERT INTO meal_entry (meal_entry_id, plan_id, recipe_id, day, servings)
+              VALUES (:eid, :pid, :rid, :day, :srv) \
+              """
         self.db.execute(
             text(sql),
-            {"pid": str(plan_id), "rid": str(recipe_id), "dix": day_idx, "srv": servings},
+            {
+                "eid": str(meal_entry_id),
+                "pid": str(plan_id),
+                "rid": str(recipe_id),
+                "day": day_value,
+                "srv": servings,
+            },
         )
+
+    # ---------- queries ----------
 
     def list_user_plans(self, user_id: uuid.UUID) -> List[Dict[str, Any]]:
         """Get all meal plans for a specific user with entry counts."""
@@ -92,11 +106,11 @@ class PlanRepository:
         SELECT
           meal_entry_id,
           recipe_id::text AS recipe_id,
-          day_index,
+          day,
           servings
         FROM meal_entry
         WHERE plan_id = :pid
-        ORDER BY day_index
+        ORDER BY day
         """
         rows = self.db.execute(text(sql), {"pid": str(plan_id)}).mappings().all()
         return [dict(r) for r in rows]

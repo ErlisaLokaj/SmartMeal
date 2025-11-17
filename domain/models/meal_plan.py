@@ -108,6 +108,7 @@ class ShoppingListItem(Base):
         nullable=False,
     )
     ingredient_id = Column(UUID(as_uuid=True), nullable=False)
+    ingredient_name = Column(Text)
     needed_qty = Column(Numeric)
     unit = Column(Text)
     checked = Column(Boolean, default=False)
@@ -115,6 +116,7 @@ class ShoppingListItem(Base):
     note = Column(Text)
 
     list = relationship("ShoppingList", back_populates="items")
+
 
 
 class CookingLog(Base):

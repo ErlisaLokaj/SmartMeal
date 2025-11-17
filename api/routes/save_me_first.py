@@ -4,12 +4,10 @@ Save-me-first API routes - Food waste prevention suggestions.
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-import uuid
 import logging
 
-from api.dependencies import get_db, get_current_user
+from api.dependencies import get_db
 from api.responses import success_response, error_response
-from domain.models.user import User
 from domain.schemas.save_me_first_schemas import SaveMeFirstResponse
 from services.save_me_first_service import SaveMeFirstService
 from app.exceptions import NotFoundError, ServiceValidationError
@@ -24,16 +22,15 @@ def get_save_me_first_suggestions(
         default=3,
         ge=1,
         le=14,
-        description="Days before expiry to consider items (1-14 days)",
+        description="Days before expiry to consider items (1–14 days)",
     ),
     max_suggestions: int = Query(
         default=5,
         ge=1,
         le=20,
-        description="Maximum number of recipe suggestions (1-20)",
+        description="Maximum number of recipe suggestions (1–20)",
     ),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     **Get save-me-first suggestions to prevent food waste.**
@@ -43,36 +40,17 @@ def get_save_me_first_suggestions(
     2. Suggesting recipes that use these ingredients
     3. Prioritizing by urgency and match score
     4. Providing actionable waste prevention tips
-
-    **Query Parameters:**
-    - `days_threshold`: Look ahead window (default: 3 days)
-    - `max_suggestions`: Maximum recipe suggestions (default: 5)
-
-    **Response includes:**
-    - List of expiring ingredients with urgency levels
-    - Recipe suggestions ranked by match and urgency
-    - Counts by urgency (critical/urgent/soon)
-    - Personalized waste prevention tips
-
-    **Urgency Levels:**
-    - `critical`: Expiring today or already expired
-    - `urgent`: Expiring in 1-2 days
-    - `soon`: Expiring within threshold days
-
-    **Example Usage:**
-    ```
-    GET /save-me-first?days_threshold=5&max_suggestions=10
-    ```
     """
     try:
         logger.info(
-            f"User {current_user.user_id} requesting save-me-first suggestions "
+            f"Generating save-me-first suggestions "
             f"(threshold: {days_threshold} days, max: {max_suggestions})"
         )
 
+        # For now, call without user_id since auth not implemented
         response = SaveMeFirstService.generate_suggestions(
             db=db,
-            user_id=current_user.user_id,
+            user_id=None,
             days_threshold=days_threshold,
             max_suggestions=max_suggestions,
         )
@@ -81,7 +59,8 @@ def get_save_me_first_suggestions(
             data=response.model_dump(),
             message=(
                 f"Found {response.total_expiring} expiring items "
-                f"({response.critical_count} critical, {response.urgent_count} urgent)"
+                f"({response.critical_count} critical, "
+                f"{response.urgent_count} urgent)"
             ),
         )
 

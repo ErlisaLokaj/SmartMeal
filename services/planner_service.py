@@ -235,7 +235,7 @@ class PlannerService:
 
         plan_id = self.repository.insert_meal_plan(req.user_id, ws, we)
         for i, rid in enumerate(picks):
-            self.repository.insert_meal_entry(plan_id, i, rid, servings=1)
+            self.repository.insert_meal_entry(plan_id, i, rid, servings=1, week_start=ws)
 
         self.repository.commit()
 

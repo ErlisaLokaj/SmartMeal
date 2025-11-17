@@ -3,6 +3,8 @@ Database configuration and session management.
 """
 
 import logging
+from contextlib import contextmanager
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from app.config import settings

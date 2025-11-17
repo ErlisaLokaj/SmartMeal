@@ -48,9 +48,9 @@ def chunked(iterator: Iterator, size: int) -> Iterator[List]:
 def ensure_constraints(tx):
     # Create constraints that make MERGE idempotent (Neo4j 4+ syntax)
     logger.info("Ensuring constraints")
-    tx.run(
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.proc_id) IS UNIQUE"
-    )
+   # tx.run(
+     #   "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.proc_id) IS UNIQUE"
+    #)
     tx.run(
         "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.id) IS UNIQUE"
     )
@@ -106,9 +106,9 @@ def seed(
     driver = GraphDatabase.driver(uri, auth=basic_auth(user, password))
     try:
         with driver.session() as session:
-            session.write_transaction(lambda tx: None)  # quick connectivity check
+            session.execute_write(lambda tx: None)  # quick connectivity check
             if create_constraints:
-                session.write_transaction(lambda tx: ensure_constraints(session))
+                session.execute_write(lambda tx: ensure_constraints(tx))
 
             logger.info("Starting load from %s (batch_size=%s)", file, batch_size)
             it = stream_pairs(file)
@@ -118,7 +118,7 @@ def seed(
                 def _write(tx):
                     write_batch(tx, batch)
 
-                session.write_transaction(_write)
+                session.execute_write(_write)
                 total += len(batch)
                 logger.info("Wrote batch, total items processed: %d", total)
 

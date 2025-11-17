@@ -72,8 +72,8 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
             # Search by common identifier properties: id (canonical), proc_id (from processed data), or name
             q = """
             MATCH (i:Ingredient) 
-            WHERE i.id = $id OR i.proc_id = $id OR i.name = $id 
-            RETURN i.id AS id,
+            WHERE i.ingredient_id = $id OR i.proc_id = $id OR i.name = $id 
+            RETURN i.ingredient_id AS ingredient_id,
                    i.proc_id AS proc_id,
                    i.name AS name,
                    i.category AS category, 
@@ -85,7 +85,7 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
             
             if rec:
                 return {
-                    "id": rec["id"],
+                    "id": rec["ingredient_id"],
                     "name": rec["name"] or f"Ingredient-{ingredient_id}",
                     "category": rec["category"] or "unknown",
                     "perishability": rec["perishability"] or "non_perishable",
@@ -146,8 +146,8 @@ def get_ingredients_batch(ingredient_ids: list) -> Dict[str, Dict[str, Any]]:
             q = """
             UNWIND $ids AS ingredient_id
             MATCH (i:Ingredient) 
-            WHERE i.id = ingredient_id OR i.proc_id = ingredient_id OR i.name = ingredient_id
-            RETURN i.id AS id, 
+            WHERE i.ingredient_id = ingredient_id OR i.proc_id = ingredient_id OR i.name = ingredient_id
+            RETURN i.ingredient_id AS ingredient_id,
                    i.proc_id AS proc_id,
                    i.name AS name,
                    i.category AS category,
@@ -156,23 +156,21 @@ def get_ingredients_batch(ingredient_ids: list) -> Dict[str, Dict[str, Any]]:
             """
             rows = session.run(q, ids=str_ids)
             for rec in rows:
-                # Map by both id and proc_id so lookups work either way
                 metadata = {
-                    "id": rec["id"],
+                    "id": rec["ingredient_id"],
                     "proc_id": rec["proc_id"],
-                    "name": rec["name"] or f"Ingredient-{rec['id']}",
+                    "name": rec["name"] or f"Ingredient-{rec['ingredient_id']}",
                     "category": rec["category"] or "unknown",
                     "perishability": rec["perishability"] or "non_perishable",
                     "defaults": {
                         "shelf_life_days": int(rec["shelf_life_days"]) if rec["shelf_life_days"] else None
                     },
                 }
-                # Store by original id for lookup
-                if rec["id"]:
-                    result[rec["id"]] = metadata
+                if rec["ingredient_id"]:
+                    result[rec["ingredient_id"]] = metadata
                 if rec["proc_id"]:
                     result[rec["proc_id"]] = metadata
-            
+
             logger.info(f"Batch fetched metadata for {len(result)} ingredients from Neo4j")
             
             # Check if any ingredients were not found
@@ -218,10 +216,12 @@ def suggest_substitutes(ingredient_id: str, limit: int = 5):
     
     try:
         with _driver.session() as session:
-            q = (
-                "MATCH (i:Ingredient {id: $id})-[:SUBSTITUTE]->(s:Ingredient) "
-                "RETURN s.id AS id LIMIT $limit"
-            )
+            q = """
+            MATCH (i:Ingredient {ingredient_id: $id})-[:SUBSTITUTE|:SUBSTITUTED_BY]->(s:Ingredient)
+            RETURN DISTINCT s.ingredient_id AS id
+            LIMIT $limit
+            """
+
             rows = session.run(q, id=str(ingredient_id), limit=limit)
             substitutes = [r["id"] for r in rows]
             
@@ -298,7 +298,7 @@ def get_disallowed_ingredient_ids(allergy_names):
         logger.exception("Error getting disallowed ingredients for allergies")
         raise RuntimeError(f"Failed to get disallowed ingredients: {str(e)}") from e
 
-# --- NEW: проверки конфликтов + выбор замены ---
+
 
 from typing import List, Tuple, Optional, Set
 
@@ -308,15 +308,16 @@ def check_conflicts(ingredient_ids: List[str], user_id: str) -> dict[str, list[s
 
     cypher = """
     MATCH (i:Ingredient)
-    WHERE i.id IN $ids
+    WHERE i.ingredient_id IN $ids
     OPTIONAL MATCH (i)-[:CONFLICTS_WITH]->(x)
-    WITH i, collect(coalesce(x.name, x.id)) AS direct_reasons
-    OPTIONAL MATCH (u:User {id: $uid})-[:HAS_RULE]->(r:Rule)<-[:CONFLICTS_WITH]-(i2:Ingredient {id: i.id})
-    WITH i, direct_reasons + collect(coalesce(r.name, r.id)) AS all_reasons
+    WITH i, collect(coalesce(x.name, x.ingredient_id)) AS direct_reasons
+    OPTIONAL MATCH (u:User {id: $uid})-[:HAS_RULE]->(r:Rule)<-[:CONFLICTS_WITH]-(i2:Ingredient {ingredient_id: i.ingredient_id})
+    WITH i, direct_reasons + collect(coalesce(r.name, r.ingredient_id)) AS all_reasons
     WITH i, [r IN all_reasons WHERE r IS NOT NULL] AS reasons
     WHERE size(reasons) > 0
-    RETURN i.id AS ingredient_id, reasons
+    RETURN i.ingredient_id AS ingredient_id, reasons
     """
+
     try:
         with _driver.session() as session:
             rows = session.run(cypher, ids=[str(x) for x in ingredient_ids], uid=str(user_id))
