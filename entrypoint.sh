@@ -73,6 +73,36 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Create ingredient_master collection from recipes
+echo ""
+echo "================================================"
+echo "Creating Ingredient Master Collection"
+echo "================================================"
+python /app/scripts/create_ingredient_master.py
+if [ $? -ne 0 ]; then
+  echo "  ⚠ Warning: Ingredient master creation failed (recipes may not be loaded yet)"
+fi
+
+# Migrate ingredients from MongoDB to PostgreSQL
+echo ""
+echo "================================================"
+echo "Running Ingredient Migration"
+echo "================================================"
+python /app/scripts/migrate_ingredients_from_mongo.py
+if [ $? -ne 0 ]; then
+  echo "  ⚠ Warning: Ingredient migration failed"
+fi
+
+# Sync Neo4j with ingredient master
+echo ""
+echo "================================================"
+echo "Syncing Neo4j with Ingredients"
+echo "================================================"
+python /app/scripts/sync_neo4j_with_ingridient.py
+if [ $? -ne 0 ]; then
+  echo "  ⚠ Warning: Neo4j sync failed"
+fi
+
 echo ""
 echo "================================================"
 echo "Starting Application: $@"
