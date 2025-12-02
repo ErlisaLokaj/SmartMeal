@@ -12,28 +12,42 @@ Usage:
 from pymongo import MongoClient
 from neo4j import GraphDatabase
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-# --- CONFIG (edit if needed) ---
-MONGO_URI = "mongodb://smartmeal-mongo:27017"
-MONGO_DB = "smartmeal"
+# --- CONFIG (use environment variables with defaults) ---
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://mongo:27017")
+MONGO_DB = os.getenv("MONGO_DB", "smartmeal")
 
-NEO4J_URI = "bolt://smartmeal-neo4j:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "neo4jpassword"
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://neo4j:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4jpassword")
 # -------------------------------
 
 
 def main():
-    logging.info("🔗 Connecting to MongoDB...")
+    logging.info("Connecting to MongoDB...")
     mongo = MongoClient(MONGO_URI)
     db = mongo[MONGO_DB]
 
-    ingredients = list(db.ingredient_master.find({}, {"_id": 1, "ingredient_id": 1}))
-    logging.info(f"📦 Loaded {len(ingredients)} ingredients from MongoDB master")
+    # Check if ingredient_master collection exists
+    if "ingredient_master" not in db.list_collection_names():
+        logging.warning("⚠️ ingredient_master collection not found in MongoDB")
+        logging.info("  Please run create_ingredient_master.py first")
+        mongo.close()
+        return
 
-    logging.info("🧠 Connecting to Neo4j...")
+    ingredients = list(db.ingredient_master.find({}, {"_id": 1, "ingredient_id": 1}))
+    logging.info(f"Loaded {len(ingredients)} ingredients from MongoDB master")
+
+    if len(ingredients) == 0:
+        logging.warning("⚠️ No ingredients found in ingredient_master collection")
+        logging.info("  Please run create_ingredient_master.py first")
+        mongo.close()
+        return
+
+    logging.info("Connecting to Neo4j...")
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
     created, updated = 0, 0
@@ -72,7 +86,7 @@ def main():
             else:
                 updated += 1
 
-    logging.info(f"✅ Sync complete: updated={updated}, created={created}")
+    logging.info(f"Sync complete: updated={updated}, created={created}")
     driver.close()
     mongo.close()
 
