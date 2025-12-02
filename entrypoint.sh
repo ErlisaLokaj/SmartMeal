@@ -73,6 +73,27 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Create ingredient master from recipes
+echo ""
+echo "================================================"
+echo "Creating Ingredient Master"
+echo "================================================"
+python /app/scripts/create_ingredient_master.py
+
+# Run ingredient migration
+echo ""
+echo "================================================"
+echo "Running Ingredient Migration"
+echo "================================================"
+python /app/scripts/migrate_ingredients_from_mongo.py
+
+# Run Neo4j sync
+echo ""
+echo "================================================"
+echo "Syncing Neo4j with Ingredients"
+echo "================================================"
+python /app/scripts/sync_neo4j_with_ingridient.py
+
 echo ""
 echo "================================================"
 echo "Starting Application: $@"

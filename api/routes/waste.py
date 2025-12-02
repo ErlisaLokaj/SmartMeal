@@ -62,9 +62,7 @@ def log_waste(
     # Step 2: Log the waste (persistence)
     waste_log = WasteService.log_waste(db, user_id, waste_data)
 
-    logger.info(
-        f"Waste logged successfully for user {user_id}: {waste_log.waste_id}"
-    )
+    logger.info(f"Waste logged successfully for user {user_id}: {waste_log.waste_id}")
 
     return waste_log
 
@@ -106,17 +104,14 @@ def get_waste_insights(
         404: If user not found
         500: Internal server error
     """
-    logger.info(
-        f"Fetching waste insights for user {user_id}, horizon={horizon} days"
-    )
+    logger.info(f"Fetching waste insights for user {user_id}, horizon={horizon} days")
 
     insights = WasteService.build_insights(db, user_id, horizon)
 
     logger.info(
         f"Waste insights generated for user {user_id}: "
         f"{insights.total_waste_count} logs, "
-        f"{len(insights.most_wasted_ingredients)} ingredients, "
-        f"{len(insights.waste_by_category)} categories"
+        f"{len(insights.most_wasted_ingredients)} ingredients"
     )
 
     return insights

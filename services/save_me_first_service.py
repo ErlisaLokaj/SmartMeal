@@ -242,7 +242,7 @@ class SaveMeFirstService:
         ]
         if critical_ids:
             results = search_recipes(
-                user_id=user_id,
+                user_id=str(user_id),
                 q=None,
                 limit=20,
                 offset=0,
@@ -259,7 +259,7 @@ class SaveMeFirstService:
         ]
         if urgent_ids and len(recipes_found) < max_suggestions * 2:
             results = search_recipes(
-                user_id=user_id,
+                user_id=str(user_id),
                 q=None,
                 limit=20,
                 offset=0,
@@ -271,7 +271,7 @@ class SaveMeFirstService:
         # Search with all expiring ingredients
         if len(recipes_found) < max_suggestions * 2:
             results = search_recipes(
-                user_id=user_id,
+                user_id=str(user_id),
                 q=None,
                 limit=20,
                 offset=0,

@@ -37,7 +37,9 @@ class PlanRepository:
 
     # ---------- insertions ----------
 
-    def insert_meal_plan(self, user_id: uuid.UUID, starts_on: date, ends_on: date) -> uuid.UUID:
+    def insert_meal_plan(
+        self, user_id: uuid.UUID, starts_on: date, ends_on: date
+    ) -> uuid.UUID:
         """
         Create a new meal plan record.
 
@@ -51,17 +53,22 @@ class PlanRepository:
         """
         self.db.execute(
             text(sql),
-            {"pid": str(plan_id), "uid": str(user_id), "start_on": starts_on, "end_on": ends_on},
+            {
+                "pid": str(plan_id),
+                "uid": str(user_id),
+                "start_on": starts_on,
+                "end_on": ends_on,
+            },
         )
         return plan_id
 
     def insert_meal_entry(
-            self,
-            plan_id: uuid.UUID,
-            day_index: int,
-            recipe_id: str,
-            servings: int = 1,
-            week_start: date | None = None,
+        self,
+        plan_id: uuid.UUID,
+        day_index: int,
+        recipe_id: str,
+        servings: int = 1,
+        week_start: date | None = None,
     ) -> None:
         meal_entry_id = uuid.uuid4()
         day_value = week_start + timedelta(days=day_index) if week_start else None
@@ -104,13 +111,14 @@ class PlanRepository:
         """Get all meal entries for a specific plan."""
         sql = """
         SELECT
-          meal_entry_id,
-          recipe_id::text AS recipe_id,
-          day,
-          servings
-        FROM meal_entry
-        WHERE plan_id = :pid
-        ORDER BY day
+          me.meal_entry_id,
+          me.recipe_id::text AS recipe_id,
+          (me.day - mp.starts_on)::int AS day_index,
+          me.servings
+        FROM meal_entry me
+        JOIN meal_plan mp ON me.plan_id = mp.plan_id
+        WHERE me.plan_id = :pid
+        ORDER BY me.day
         """
         rows = self.db.execute(text(sql), {"pid": str(plan_id)}).mappings().all()
         return [dict(r) for r in rows]

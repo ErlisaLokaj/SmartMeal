@@ -26,7 +26,6 @@ from domain.schemas.waste_schemas import (
     WasteLogResponse,
     WasteInsightsResponse,
     WasteByIngredient,
-    WasteByCategory,
     WasteTrend,
 )
 from app.exceptions import NotFoundError, ServiceValidationError
@@ -80,15 +79,6 @@ Waste Management Flow (Use Case 9)
                "unit": "kg",
                "waste_count": 5,
                "percentage_of_total": 39.22
-           }
-       ],
-       
-       "waste_by_category": [
-           {
-               "category": "vegetable",
-               "total_quantity": 15.0,
-               "waste_count": 7,
-               "percentage_of_total": 58.82
            }
        ],
        
@@ -318,7 +308,6 @@ def test_get_waste_insights_success(monkeypatch):
 
     Insight categories:
     - most_wasted_ingredients: Top 5 by quantity
-    - waste_by_category: Aggregated by ingredient category
     - waste_trends: Time-based patterns (weekly)
     - common_reasons: Most frequent waste reasons
 
@@ -348,14 +337,6 @@ def test_get_waste_insights_success(monkeypatch):
                 percentage_of_total=39.22,
             )
         ],
-        waste_by_category=[
-            WasteByCategory(
-                category="vegetable",
-                total_quantity=Decimal("15.0"),
-                waste_count=7,
-                percentage_of_total=58.82,
-            )
-        ],
         waste_trends=[
             WasteTrend(
                 period="2025-W44",
@@ -383,7 +364,6 @@ def test_get_waste_insights_success(monkeypatch):
     assert float(body["total_quantity"]) == 25.5
     assert body["horizon_days"] == 30
     assert len(body["most_wasted_ingredients"]) == 1
-    assert len(body["waste_by_category"]) == 1
     assert len(body["waste_trends"]) == 1
     assert len(body["common_reasons"]) == 2
 
@@ -429,7 +409,6 @@ def test_get_waste_insights_default_horizon(monkeypatch):
         total_waste_count=0,
         total_quantity=Decimal("0"),
         most_wasted_ingredients=[],
-        waste_by_category=[],
         waste_trends=[],
         common_reasons=[],
         horizon_days=30,

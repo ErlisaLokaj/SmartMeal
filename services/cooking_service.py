@@ -383,16 +383,30 @@ class CookingService:
         # Nutritional summary
         nutritional_summary = None
         if "nutrition" in recipe and recipe["nutrition"]:
+            # Handle nested nutrition structure (e.g. {"per_serving": {...}})
             base_nutrition = recipe["nutrition"]
+            if "per_serving" in base_nutrition:
+                base_nutrition = base_nutrition["per_serving"]
+
+            # Calculate total nutrition for the cooked servings
+            # Assuming base_nutrition is per 1 serving
+            # Keys in MongoDB are: kcal, protein_g, carb_g, fat_g
             nutritional_summary = NutritionalSummary(
-                calories_per_serving=(
-                    base_nutrition.get("calories", 0) / servings if servings > 0 else 0
-                ),
-                protein_g=base_nutrition.get("protein", 0),
-                carbs_g=base_nutrition.get("carbs", 0),
-                fat_g=base_nutrition.get("fat", 0),
-                fiber_g=base_nutrition.get("fiber"),
-                sodium_mg=base_nutrition.get("sodium"),
+                kcal=(
+                    base_nutrition.get("kcal", base_nutrition.get("calories", 0)) or 0
+                )
+                * servings,
+                protein_g=(
+                    base_nutrition.get("protein_g", base_nutrition.get("protein", 0))
+                    or 0
+                )
+                * servings,
+                carb_g=(
+                    base_nutrition.get("carb_g", base_nutrition.get("carbs", 0)) or 0
+                )
+                * servings,
+                fat_g=(base_nutrition.get("fat_g", base_nutrition.get("fat", 0)) or 0)
+                * servings,
             )
 
         # Waste prevention tips

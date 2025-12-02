@@ -28,20 +28,25 @@ class UserPreferenceService:
                 continue
 
             try:
+                # Convert strength to uppercase to match database enum values
+                strength_upper = strength.upper()
+
                 existing = (
                     db.query(UserPreference)
-                    .filter(UserPreference.user_id == user_id, UserPreference.tag == tag)
+                    .filter(
+                        UserPreference.user_id == user_id, UserPreference.tag == tag
+                    )
                     .first()
                 )
 
                 if existing:
-                    existing.strength = PreferenceStrength(strength)
+                    existing.strength = PreferenceStrength(strength_upper)
                     logger.info(f"Updated preference: {tag} -> {strength}")
                 else:
                     new_pref = UserPreference(
                         user_id=user_id,
                         tag=tag,
-                        strength=PreferenceStrength(strength),
+                        strength=PreferenceStrength(strength_upper),
                     )
                     db.add(new_pref)
                     logger.info(f"Added preference: {tag} -> {strength}")

@@ -5,6 +5,7 @@ Save-me-first API routes - Food waste prevention suggestions.
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 import logging
+from uuid import UUID
 
 from api.dependencies import get_db
 from api.responses import success_response, error_response
@@ -18,6 +19,7 @@ logger = logging.getLogger("smartmeal.api.save_me_first")
 
 @router.get("", response_model=dict)
 def get_save_me_first_suggestions(
+    user_id: UUID = Query(..., description="User ID to generate suggestions for"),
     days_threshold: int = Query(
         default=3,
         ge=1,
@@ -30,7 +32,7 @@ def get_save_me_first_suggestions(
         le=20,
         description="Maximum number of recipe suggestions (1–20)",
     ),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     **Get save-me-first suggestions to prevent food waste.**
@@ -43,14 +45,13 @@ def get_save_me_first_suggestions(
     """
     try:
         logger.info(
-            f"Generating save-me-first suggestions "
+            f"Generating save-me-first suggestions for user {user_id} "
             f"(threshold: {days_threshold} days, max: {max_suggestions})"
         )
 
-        # For now, call without user_id since auth not implemented
         response = SaveMeFirstService.generate_suggestions(
             db=db,
-            user_id=None,
+            user_id=user_id,
             days_threshold=days_threshold,
             max_suggestions=max_suggestions,
         )

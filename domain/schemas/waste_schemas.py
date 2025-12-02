@@ -53,15 +53,6 @@ class WasteByIngredient(BaseModel):
     percentage_of_total: Optional[float] = None
 
 
-class WasteByCategory(BaseModel):
-    """Aggregated waste data by category"""
-
-    category: str
-    total_quantity: Decimal
-    waste_count: int
-    percentage_of_total: Optional[float] = None
-
-
 class WasteTrend(BaseModel):
     """Waste trend data over time"""
 
@@ -76,7 +67,6 @@ class WasteInsightsResponse(BaseModel):
     total_waste_count: int
     total_quantity: Decimal
     most_wasted_ingredients: List[WasteByIngredient]
-    waste_by_category: List[WasteByCategory]
     waste_trends: List[WasteTrend]
     common_reasons: List[Dict[str, Any]]  # [{reason: str, count: int}, ...]
     horizon_days: int

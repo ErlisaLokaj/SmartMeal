@@ -33,7 +33,6 @@ def stream_pairs(path: str) -> Iterator[Dict]:
             yield item
 
 
-
 def chunked(iterator: Iterator, size: int) -> Iterator[List]:
     batch = []
     for item in iterator:
@@ -48,11 +47,11 @@ def chunked(iterator: Iterator, size: int) -> Iterator[List]:
 def ensure_constraints(tx):
     # Create constraints that make MERGE idempotent (Neo4j 4+ syntax)
     logger.info("Ensuring constraints")
-   # tx.run(
-     #   "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.proc_id) IS UNIQUE"
-    #)
+    # tx.run(
+    #   "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.proc_id) IS UNIQUE"
+    # )
     tx.run(
-        "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.id) IS UNIQUE"
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.ingredient_id) IS UNIQUE"
     )
     tx.run(
         "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.name) IS UNIQUE"
@@ -64,16 +63,38 @@ def write_batch(tx, batch: List[Dict]):
     # We build a parameterized UNWIND payload to MERGE nodes and relationships.
     pairs = []
     for item in batch:
-        base = {"name": item.get("name"), "proc_id": item.get("proc_id"), "id": item.get("id")}
-        for sub in item.get("substitutes", []) or []:
+        # Support two formats:
+        # 1) Grouped items with `name`, `proc_id`, `id`, and `substitutes` list (existing format)
+        # 2) Flat pair rows as present in `data/substitution_pairs.json` with keys:
+        #    `ingredient`, `substitution`, `ingredient_original_id`, `substitution_original_id`,
+        #    `ingredient_processed_id`, `substitution_processed_id`.
+        if item.get("substitutes"):
+            base = {
+                "name": item.get("name"),
+                "proc_id": item.get("proc_id"),
+                "id": item.get("id"),
+            }
+            for sub in item.get("substitutes", []) or []:
+                pairs.append(
+                    {
+                        "base_name": base["name"],
+                        "base_proc": base.get("proc_id"),
+                        "base_id": base.get("id"),
+                        "sub_name": sub.get("name"),
+                        "sub_proc": sub.get("proc_id"),
+                        "sub_id": sub.get("id"),
+                    }
+                )
+        elif item.get("ingredient") and item.get("substitution"):
+            # Map flat format to UNWIND pairs
             pairs.append(
                 {
-                    "base_name": base["name"],
-                    "base_proc": base.get("proc_id"),
-                    "base_id": base.get("id"),
-                    "sub_name": sub.get("name"),
-                    "sub_proc": sub.get("proc_id"),
-                    "sub_id": sub.get("id"),
+                    "base_name": item.get("ingredient"),
+                    "base_proc": item.get("ingredient_processed_id"),
+                    "base_id": item.get("ingredient_original_id"),
+                    "sub_name": item.get("substitution"),
+                    "sub_proc": item.get("substitution_processed_id"),
+                    "sub_id": item.get("substitution_original_id"),
                 }
             )
 
@@ -85,9 +106,9 @@ def write_batch(tx, batch: List[Dict]):
     query = """
     UNWIND $pairs AS p
     MERGE (b:Ingredient {name: p.base_name})
-    SET b.proc_id = coalesce(b.proc_id, p.base_proc), b.id = coalesce(b.id, p.base_id)
+    SET b.proc_id = coalesce(b.proc_id, p.base_proc), b.ingredient_id = coalesce(b.ingredient_id, p.base_id)
     MERGE (s:Ingredient {name: p.sub_name})
-    SET s.proc_id = coalesce(s.proc_id, p.sub_proc), s.id = coalesce(s.id, p.sub_id)
+    SET s.proc_id = coalesce(s.proc_id, p.sub_proc), s.ingredient_id = coalesce(s.ingredient_id, p.sub_id)
     MERGE (b)-[r:SUBSTITUTED_BY]->(s)
     RETURN count(r) as created
     """

@@ -19,14 +19,12 @@ class IngredientShortage(BaseModel):
 
 
 class NutritionalSummary(BaseModel):
-    """Nutritional information per serving"""
+    """Nutritional information for the cooked meal"""
 
-    calories_per_serving: Optional[float] = None
+    kcal: Optional[float] = None
     protein_g: Optional[float] = None
-    carbs_g: Optional[float] = None
+    carb_g: Optional[float] = None
     fat_g: Optional[float] = None
-    fiber_g: Optional[float] = None
-    sodium_mg: Optional[float] = None
 
 
 class CookRecipeRequest(BaseModel):

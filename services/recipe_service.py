@@ -72,6 +72,8 @@ def search_recipes(
     offset: int = 0,
     include: Optional[str] = None,
     exclude: Optional[str] = None,
+    include_ingredient_ids: Optional[List[str]] = None,
+    exclude_ingredient_ids: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Recipe search without using $text to avoid relying on Mongo indexes.
@@ -79,6 +81,8 @@ def search_recipes(
     - cuisine — exact match
     - include — requires the presence of an ingredient by name (regex)
     - exclude — excludes recipes where the ingredient by name is found (regex)
+    - include_ingredient_ids — requires recipes to contain ANY of these ingredient IDs
+    - exclude_ingredient_ids — excludes recipes containing ANY of these ingredient IDs
     - user_id — excludes recipes containing ingredients from user_allergy (by ingredient_id)
     """
     and_clauses: List[Dict[str, Any]] = []
@@ -138,6 +142,16 @@ def search_recipes(
                     }
                 }
             }
+        )
+
+    if include_ingredient_ids:
+        and_clauses.append(
+            {"ingredients.ingredient_id": {"$in": include_ingredient_ids}}
+        )
+
+    if exclude_ingredient_ids:
+        and_clauses.append(
+            {"ingredients.ingredient_id": {"$nin": exclude_ingredient_ids}}
         )
 
     if user_id:

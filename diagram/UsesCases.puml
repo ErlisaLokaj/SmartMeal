@@ -865,12 +865,11 @@ else user exists
       
       W -> W: aggregate totals (count, quantity)
       W -> W: aggregate by ingredient (with name from Neo4j)
-      W -> W: aggregate by category (from Neo4j metadata)
       W -> W: compute trends by week
       W -> W: aggregate by reason (top 5)
       W -> W: calculate percentages
       
-      W --> C: WasteInsightsResponse {\n  total_count, total_qty,\n  most_wasted_ingredients[],\n  waste_by_category[],\n  waste_trends[],\n  common_reasons[]\n}
+      W --> C: WasteInsightsResponse {\n  total_count, total_qty,\n  most_wasted_ingredients[],\n  waste_trends[],\n  common_reasons[]\n}
       C --> FE: insights view (charts/metrics)
     end
   end

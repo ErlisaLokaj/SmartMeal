@@ -12,28 +12,29 @@ Usage:
 from pymongo import MongoClient
 from neo4j import GraphDatabase
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 # --- CONFIG (edit if needed) ---
-MONGO_URI = "mongodb://smartmeal-mongo:27017"
-MONGO_DB = "smartmeal"
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://smartmeal-mongo:27017")
+MONGO_DB = os.getenv("MONGO_DB", "smartmeal")
 
-NEO4J_URI = "bolt://smartmeal-neo4j:7687"
-NEO4J_USER = "neo4j"
-NEO4J_PASSWORD = "neo4jpassword"
+NEO4J_URI = os.getenv("NEO4J_URI", "bolt://smartmeal-neo4j:7687")
+NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4jpassword")
 # -------------------------------
 
 
 def main():
-    logging.info("🔗 Connecting to MongoDB...")
+    logging.info("Connecting to MongoDB...")
     mongo = MongoClient(MONGO_URI)
     db = mongo[MONGO_DB]
 
     ingredients = list(db.ingredient_master.find({}, {"_id": 1, "ingredient_id": 1}))
-    logging.info(f"📦 Loaded {len(ingredients)} ingredients from MongoDB master")
+    logging.info(f"Loaded {len(ingredients)} ingredients from MongoDB master")
 
-    logging.info("🧠 Connecting to Neo4j...")
+    logging.info("Connecting to Neo4j...")
     driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
     created, updated = 0, 0
@@ -44,7 +45,7 @@ def main():
             uuid = doc.get("ingredient_id")
 
             if not name or not uuid:
-                logging.warning(f"⚠️ Skipping ingredient without UUID: {name}")
+                logging.warning(f"Skipping ingredient without UUID: {name}")
                 continue
 
             # Try to update an existing ingredient by name
@@ -72,7 +73,7 @@ def main():
             else:
                 updated += 1
 
-    logging.info(f"✅ Sync complete: updated={updated}, created={created}")
+    logging.info(f"Sync complete: updated={updated}, created={created}")
     driver.close()
     mongo.close()
 

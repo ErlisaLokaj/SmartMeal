@@ -1,0 +1,929 @@
+{
+  "info": {
+    "name": "SmartMeal API",
+    "description": "API collection for SmartMeal application",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "123e4567-e89b-12d3-a456-426614174000",
+      "type": "string"
+    },
+    {
+      "key": "recipe_id",
+      "value": "507f1f77bcf86cd799439011",
+      "type": "string"
+    },
+    {
+      "key": "plan_id",
+      "value": "123e4567-e89b-12d3-a456-426614174001",
+      "type": "string"
+    },
+    {
+      "key": "list_id",
+      "value": "123e4567-e89b-12d3-a456-426614174002",
+      "type": "string"
+    },
+    {
+      "key": "pantry_item_id",
+      "value": "123e4567-e89b-12d3-a456-426614174003",
+      "type": "string"
+    },
+    {
+      "key": "ingredient_id",
+      "value": "123e4567-e89b-12d3-a456-426614174004",
+      "type": "string"
+    },
+    {
+      "key": "list_item_id",
+      "value": "123e4567-e89b-12d3-a456-426614174005",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"user@example.com\",\n    \"full_name\": \"John Doe\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["users", "{{user_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Profiles",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"full_name\": \"John Updated\",\n    \"dietary_profile\": {\n        \"goal\": \"maintain\",\n        \"activity\": \"moderate\",\n        \"kcal_target\": 2000,\n        \"protein_target_g\": 150,\n        \"carb_target_g\": 200,\n        \"fat_target_g\": 70,\n        \"cuisine_likes\": [\"Italian\", \"Mexican\"],\n        \"cuisine_dislikes\": [\"Indian\"]\n    },\n    \"allergies\": [],\n    \"preferences\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Dietary Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/dietary",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "dietary"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set Dietary Profile",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"goal\": \"lose_weight\",\n    \"activity\": \"active\",\n    \"kcal_target\": 1800,\n    \"protein_target_g\": 160,\n    \"carb_target_g\": 150,\n    \"fat_target_g\": 60,\n    \"cuisine_likes\": [\"Japanese\"],\n    \"cuisine_dislikes\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/dietary",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "dietary"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Preferences",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/preferences",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "preferences"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set Preferences",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n    {\n        \"tag\": \"vegetarian\",\n        \"strength\": \"strong_like\"\n    },\n    {\n        \"tag\": \"spicy\",\n        \"strength\": \"like\"\n    }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/preferences",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "preferences"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Preference",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"tag\": \"gluten-free\",\n    \"strength\": \"strong_like\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/preferences",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "preferences"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Preference",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/preferences/vegetarian",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "preferences", "vegetarian"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Allergies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/allergies",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "allergies"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set Allergies",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n    {\n        \"ingredient_id\": \"{{ingredient_id}}\",\n        \"note\": \"Severe reaction\"\n    }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/allergies",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "allergies"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Allergy",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"ingredient_id\": \"{{ingredient_id}}\",\n    \"note\": \"Mild reaction\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/allergies",
+              "host": ["{{base_url}}"],
+              "path": ["profiles", "{{user_id}}", "allergies"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Remove Allergy",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/profiles/{{user_id}}/allergies/{{ingredient_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "profiles",
+                "{{user_id}}",
+                "allergies",
+                "{{ingredient_id}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Pantry",
+      "item": [
+        {
+          "name": "Get Pantry",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pantry?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["pantry"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Pantry",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{user_id}}\",\n    \"items\": [\n        {\n            \"ingredient_id\": \"{{ingredient_id}}\",\n            \"quantity\": 500,\n            \"unit\": \"g\",\n            \"best_before\": \"2025-12-31\"\n        }\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pantry",
+              "host": ["{{base_url}}"],
+              "path": ["pantry"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Add Pantry Item",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{user_id}}\",\n    \"item\": {\n        \"ingredient_id\": \"{{ingredient_id}}\",\n        \"quantity\": 200,\n        \"unit\": \"ml\",\n        \"best_before\": \"2025-11-30\"\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pantry",
+              "host": ["{{base_url}}"],
+              "path": ["pantry"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Pantry Item",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pantry/{{pantry_item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["pantry", "{{pantry_item_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Quantity",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"quantity_change\": -50,\n    \"reason\": \"cooking\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/pantry/{{pantry_item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["pantry", "{{pantry_item_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Expiring Soon",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/pantry/expiring-soon?user_id={{user_id}}&days=3",
+              "host": ["{{base_url}}"],
+              "path": ["pantry", "expiring-soon"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "days",
+                  "value": "3"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Waste",
+      "item": [
+        {
+          "name": "Log Waste",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"ingredient_id\": \"{{ingredient_id}}\",\n    \"quantity\": 100,\n    \"unit\": \"g\",\n    \"reason\": \"spoiled\",\n    \"pantry_item_id\": \"{{pantry_item_id}}\",\n    \"auto_remove_from_pantry\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/waste?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["waste"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Insights",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/waste/insights?user_id={{user_id}}&horizon=30",
+              "host": ["{{base_url}}"],
+              "path": ["waste", "insights"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "horizon",
+                  "value": "30"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Cooking",
+      "item": [
+        {
+          "name": "Cook Recipe",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{user_id}}\",\n    \"recipe_id\": \"{{recipe_id}}\",\n    \"servings\": 4\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/cook",
+              "host": ["{{base_url}}"],
+              "path": ["cook"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cook/history?user_id={{user_id}}&days=7",
+              "host": ["{{base_url}}"],
+              "path": ["cook", "history"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "days",
+                  "value": "7"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/cook/stats?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["cook", "stats"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Generate Shopping List",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{user_id}}\",\n    \"recipe_id\": \"{{recipe_id}}\",\n    \"servings\": 4\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/cook/shopping-list",
+              "host": ["{{base_url}}"],
+              "path": ["cook", "shopping-list"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Save-me-first",
+      "item": [
+        {
+          "name": "Get Suggestions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/save-me-first?user_id={{user_id}}&days_threshold=3&max_suggestions=5",
+              "host": ["{{base_url}}"],
+              "path": ["save-me-first"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "days_threshold",
+                  "value": "3"
+                },
+                {
+                  "key": "max_suggestions",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health-check",
+              "host": ["{{base_url}}"],
+              "path": ["health-check"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Neo4j Seed Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/neo4j/seed-status",
+              "host": ["{{base_url}}"],
+              "path": ["neo4j", "seed-status"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Recipes",
+      "item": [
+        {
+          "name": "Search Recipes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/recipes?q=pasta&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["recipes"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "pasta"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recipe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/recipes/{{recipe_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["recipes", "{{recipe_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Recommendations",
+      "item": [
+        {
+          "name": "Add User Preferences",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "[\n    {\n        \"tag\": \"quick\",\n        \"strength\": \"like\"\n    }\n]",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/recommendations/users/{{user_id}}/preferences",
+              "host": ["{{base_url}}"],
+              "path": ["recommendations", "users", "{{user_id}}", "preferences"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Recommendations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/recommendations/{{user_id}}?limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["recommendations", "{{user_id}}"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Shopping Lists",
+      "item": [
+        {
+          "name": "Create Shopping List",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"plan_id\": \"{{plan_id}}\",\n    \"user_id\": \"{{user_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shopping-lists",
+              "host": ["{{base_url}}"],
+              "path": ["shopping-lists"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Shopping List",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shopping-lists/{{list_id}}?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["shopping-lists", "{{list_id}}"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Shopping Lists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shopping-lists?user_id={{user_id}}&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["shopping-lists"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Item",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"checked\": true,\n    \"note\": \"Bought organic\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/shopping-lists/items/{{list_item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["shopping-lists", "items", "{{list_item_id}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Shopping List",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/shopping-lists/{{list_id}}?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["shopping-lists", "{{list_id}}"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Meal Planning",
+      "item": [
+        {
+          "name": "Generate Week Plan",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{user_id}}\",\n    \"days\": 7,\n    \"use_substitutions\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/plans",
+              "host": ["{{base_url}}"],
+              "path": ["plans"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List User Plans",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/plans?user_id={{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["plans"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Plan Entries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/plans/{{plan_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["plans", "{{plan_id}}"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

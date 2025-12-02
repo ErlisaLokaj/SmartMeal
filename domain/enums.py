@@ -28,7 +28,7 @@ class ActivityLevel(str, enum.Enum):
 class PreferenceStrength(str, enum.Enum):
     """User preference intensity"""
 
-    AVOID = "avoid"
-    NEUTRAL = "neutral"
-    LIKE = "like"
-    LOVE = "love"
+    AVOID = "AVOID"
+    NEUTRAL = "NEUTRAL"
+    LIKE = "LIKE"
+    LOVE = "LOVE"

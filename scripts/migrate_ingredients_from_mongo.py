@@ -17,7 +17,7 @@ from pathlib import Path
 # Add parent directory to path to import from project
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from domain.models import get_db_session, Ingredient
+from domain.models import SessionLocal, Ingredient
 from adapters import mongo_adapter
 from datetime import datetime, timedelta
 from sqlalchemy import func
@@ -33,56 +33,81 @@ def bulk_import_from_mongo():
     logger.info("Starting bulk import from MongoDB")
 
     # Get MongoDB database
-    mongo_db = mongo_adapter._get_db()
+    try:
+        mongo_db = mongo_adapter._get_db()
+        logger.info("Got MongoDB connection")
+    except Exception as e:
+        logger.error(f"Failed to get MongoDB connection: {e}")
+        return {"error": str(e)}
 
     if mongo_db is None:
-        logger.error("MongoDB connection failed")
+        logger.error("MongoDB connection failed (None)")
         return {"error": "MongoDB not available", "created": 0, "existing": 0}
 
-    if "ingredient_master" not in mongo_db.list_collection_names():
-        logger.error("ingredient_master collection not found")
-        return {"error": "ingredient_master not found", "created": 0, "existing": 0}
+    try:
+        collections = mongo_db.list_collection_names()
+        logger.info(f"Collections: {collections}")
+        if "ingredient_master" not in collections:
+            logger.error("ingredient_master collection not found")
+            return {"error": "ingredient_master not found", "created": 0, "existing": 0}
+    except Exception as e:
+        logger.error(f"Failed to list collections: {e}")
+        return {"error": str(e)}
 
-    ingredients_mongo = list(mongo_db.ingredient_master.find())
-    logger.info(f"Found {len(ingredients_mongo)} ingredients in MongoDB")
+    try:
+        ingredients_mongo = list(mongo_db.ingredient_master.find())
+        logger.info(f"Found {len(ingredients_mongo)} ingredients in MongoDB")
+    except Exception as e:
+        logger.error(f"Failed to fetch ingredients from MongoDB: {e}")
+        return {"error": str(e)}
 
     stats = {"created": 0, "existing": 0, "errors": 0}
 
     # Get database session
-    with get_db_session() as db:
-        for ing_doc in ingredients_mongo:
-            name = ing_doc.get("_id")  # Name is in _id field
+    logger.info("Connecting to PostgreSQL...")
+    try:
+        with SessionLocal() as db:
+            logger.info("Connected to PostgreSQL")
+            for i, ing_doc in enumerate(ingredients_mongo):
+                if i % 100 == 0:
+                    logger.info(f"Processing ingredient {i}/{len(ingredients_mongo)}")
 
-            if not name:
-                stats["errors"] += 1
-                continue
+                name = ing_doc.get("_id")  # Name is in _id field
 
-            normalized_name = name.lower().strip()
+                if not name:
+                    stats["errors"] += 1
+                    continue
 
-            # Check if ingredient already exists
-            existing = (
-                db.query(Ingredient)
-                .filter(func.lower(Ingredient.name) == normalized_name)
-                .first()
-            )
+                normalized_name = name.lower().strip()
 
-            if existing:
-                stats["existing"] += 1
-                ingredient = existing
-            else:
-                # Create new ingredient
-                ingredient = Ingredient(name=normalized_name)
-                db.add(ingredient)
-                db.commit()
-                db.refresh(ingredient)
-                stats["created"] += 1
-                logger.info(f"Created ingredient: {normalized_name}")
+                # Check if ingredient already exists
+                existing = (
+                    db.query(Ingredient)
+                    .filter(func.lower(Ingredient.name) == normalized_name)
+                    .first()
+                )
 
-            # Update MongoDB with PostgreSQL UUID
-            mongo_db.ingredient_master.update_one(
-                {"_id": name},
-                {"$set": {"ingredient_id": str(ingredient.ingredient_id)}},
-            )
+                if existing:
+                    stats["existing"] += 1
+                    ingredient = existing
+                else:
+                    # Create new ingredient
+                    ingredient = Ingredient(name=normalized_name)
+                    db.add(ingredient)
+                    db.commit()
+                    db.refresh(ingredient)
+                    stats["created"] += 1
+                    # logger.info(f"Created ingredient: {normalized_name}")
+
+                # Update MongoDB with PostgreSQL UUID
+                mongo_db.ingredient_master.update_one(
+                    {"_id": name},
+                    {"$set": {"ingredient_id": str(ingredient.ingredient_id)}},
+                )
+
+    except Exception as e:
+        logger.error(f"PostgreSQL operation failed: {e}")
+        return {"error": str(e)}
 
     logger.info(f"Bulk import complete: {stats}")
     return stats
@@ -101,7 +126,7 @@ def sync_all_recipes_to_master():
         return {"error": "MongoDB not available"}
 
     # Get all ingredients from PostgreSQL
-    with get_db_session() as db:
+    with SessionLocal() as db:
         ingredients = db.query(Ingredient).all()
         name_to_id = {ing.name: str(ing.ingredient_id) for ing in ingredients}
 

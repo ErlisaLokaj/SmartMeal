@@ -149,3 +149,20 @@ class PantryRepository(BaseRepository[PantryItem]):
         count = self.db.query(PantryItem).filter(PantryItem.user_id == user_id).delete()
         self.db.commit()
         return count
+
+    def get_items_for_decrement(
+        self, user_id: UUID, ingredient_id: UUID, unit: str
+    ) -> List[PantryItem]:
+        """Get pantry items for decrementing (FIFO order by best_before)"""
+        return (
+            self.db.query(PantryItem)
+            .filter(
+                and_(
+                    PantryItem.user_id == user_id,
+                    PantryItem.ingredient_id == ingredient_id,
+                    PantryItem.unit == unit,
+                )
+            )
+            .order_by(PantryItem.best_before.asc())
+            .all()
+        )

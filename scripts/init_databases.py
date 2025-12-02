@@ -181,7 +181,7 @@ def init_neo4j():
 
             # Count substitutions
             result = session.run(
-                "MATCH ()-[r:CAN_SUBSTITUTE]->() RETURN count(r) as count"
+                "MATCH ()-[r:SUBSTITUTE|SUBSTITUTED_BY|CAN_SUBSTITUTE]->() RETURN count(r) as count"
             )
             sub_count = result.single()["count"]
 

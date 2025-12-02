@@ -19,33 +19,38 @@ logger = logging.getLogger("smartmeal.api.recommendations")
 
 from sqlalchemy import text
 
+
 @router.post("/users/{user_id}/preferences")
 def add_user_preferences(
-    user_id: UUID,
-    preferences: List[dict],
-    db: Session = Depends(get_db_session)
+    user_id: UUID, preferences: List[dict], db: Session = Depends(get_db_session)
 ):
     """
     Add or update user tag-based preferences for a given user.
     """
     try:
         for pref in preferences:
+            # Convert strength to uppercase to match database enum values
+            strength_upper = pref["strength"].upper()
             db.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO user_preference (user_id, tag, strength)
                     VALUES (:uid, :tag, :strength)
                     ON CONFLICT (user_id, tag) DO UPDATE SET strength = EXCLUDED.strength
-                """),
-                {"uid": str(user_id), "tag": pref["tag"], "strength": pref["strength"]}
+                """
+                ),
+                {"uid": str(user_id), "tag": pref["tag"], "strength": strength_upper},
             )
         db.commit()
         return {
             "success": True,
-            "message": f"Saved {len(preferences)} preferences for user {user_id}"
+            "message": f"Saved {len(preferences)} preferences for user {user_id}",
         }
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to add preferences: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to add preferences: {str(e)}"
+        )
 
 
 @router.get("/{user_id}", response_model=List[RecipeRecommendation])

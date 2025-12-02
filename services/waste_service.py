@@ -12,7 +12,6 @@ from domain.schemas.waste_schemas import (
     WasteLogResponse,
     WasteInsightsResponse,
     WasteByIngredient,
-    WasteByCategory,
     WasteTrend,
 )
 from repositories import UserRepository, WasteRepository, IngredientRepository
@@ -247,7 +246,6 @@ class WasteService:
                 total_waste_count=0,
                 total_quantity=Decimal("0"),
                 most_wasted_ingredients=[],
-                waste_by_category=[],
                 waste_trends=[],
                 common_reasons=[],
                 horizon_days=horizon_days,
@@ -322,40 +320,6 @@ class WasteService:
                 )
             )
 
-        # Aggregate by category (from batch-fetched metadata)
-        category_aggregates = {}
-        for log in waste_logs:
-            meta = ingredient_metadata_map.get(str(log.ingredient_id), {})
-            category = meta.get("category", "unknown")
-
-            if category not in category_aggregates:
-                category_aggregates[category] = {
-                    "total_quantity": Decimal("0"),
-                    "waste_count": 0,
-                }
-            category_aggregates[category]["total_quantity"] += log.quantity
-            category_aggregates[category]["waste_count"] += 1
-
-        waste_by_category = []
-        for category, data in sorted(
-            category_aggregates.items(),
-            key=lambda x: x[1]["total_quantity"],
-            reverse=True,
-        ):
-            percentage = (
-                float(data["total_quantity"] / total_quantity * 100)
-                if total_quantity > 0
-                else 0
-            )
-            waste_by_category.append(
-                WasteByCategory(
-                    category=category,
-                    total_quantity=data["total_quantity"],
-                    waste_count=data["waste_count"],
-                    percentage_of_total=round(percentage, 2),
-                )
-            )
-
         # Calculate trends by week
         trend_aggregates = {}
         for log in waste_logs:
@@ -394,7 +358,6 @@ class WasteService:
         logger.info(
             f"build_insights completed: user_id={user_id} "
             f"total_count={total_waste_count} "
-            f"categories={len(waste_by_category)} "
             f"trends={len(waste_trends)} "
             f"top_reasons={len(common_reasons)}"
         )
@@ -403,7 +366,6 @@ class WasteService:
             total_waste_count=total_waste_count,
             total_quantity=total_quantity,
             most_wasted_ingredients=most_wasted_ingredients,
-            waste_by_category=waste_by_category,
             waste_trends=waste_trends,
             common_reasons=common_reasons,
             horizon_days=horizon_days,

@@ -748,7 +748,6 @@ def test_waste_service_build_insights(db_session: Session):
         assert insights.total_waste_count >= 2
         assert insights.total_quantity >= Decimal("1.5")
         assert len(insights.most_wasted_ingredients) >= 2
-        assert len(insights.waste_by_category) >= 1
 
 
 # =============================================================================
