@@ -331,8 +331,6 @@ class SaveMeFirstService:
                 RecipeSuggestion(
                     recipe_id=recipe["id"],
                     recipe_name=recipe.get("name", "Unknown"),
-                    cuisine=recipe.get("cuisine"),
-                    total_time_minutes=recipe.get("total_time"),
                     servings=recipe.get("servings", 4),
                     uses_expiring_count=uses_expiring_count,
                     expiring_ingredients_used=expiring_used_names,

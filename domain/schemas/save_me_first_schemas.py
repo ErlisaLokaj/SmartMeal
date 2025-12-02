@@ -27,8 +27,6 @@ class RecipeSuggestion(BaseModel):
 
     recipe_id: str
     recipe_name: str
-    cuisine: Optional[str]
-    total_time_minutes: Optional[int]
     servings: int
     uses_expiring_count: int = Field(
         ..., description="Number of expiring ingredients this recipe uses"
