@@ -194,6 +194,9 @@ python scripts/seed_neo4j.py --file data/substitution_pairs.json
 
 # Import recipes
 python data/import_recipes.py
+
+# Seed PostgreSQL
+python scripts/seed_postgres.py     
 ```
 
 ## 🧪 Testing
