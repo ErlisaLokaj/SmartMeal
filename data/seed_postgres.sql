@@ -8,7 +8,7 @@ VALUES
 ON CONFLICT (user_id) DO NOTHING;
 
 -- -----------------------------
--- 2) Ingredients (from your Mongo recipes sample)
+-- 2) Ingredients
 -- -----------------------------
 -- Mark chicken as allergen to test allergy filtering/recommendations
 INSERT INTO ingredient (ingredient_id, name, category, is_allergen, created_at, updated_at)
