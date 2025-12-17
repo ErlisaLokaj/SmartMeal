@@ -9,8 +9,7 @@ ON CONFLICT (user_id) DO NOTHING;
 
 -- -----------------------------
 -- 2) Ingredients
--- -----------------------------
--- Mark chicken as allergen to test allergy filtering/recommendations
+-- ----------------------------
 INSERT INTO ingredient (ingredient_id, name, category, is_allergen, created_at, updated_at)
 VALUES
     ('87bfc225-7ba8-45db-96c9-7fee29ed6a28', 'whole chicken', 'protein', true,  NOW(), NOW()),
@@ -28,7 +27,6 @@ ON CONFLICT (ingredient_id) DO NOTHING;
 -- -----------------------------
 -- 3) Allergy (Demo user allergic to chicken)
 -- -----------------------------
-
 INSERT INTO user_allergy (user_id, ingredient_id)
 VALUES
     ( '11111111-1111-1111-1111-111111111111', '87bfc225-7ba8-45db-96c9-7fee29ed6a28');
