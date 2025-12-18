@@ -5,8 +5,10 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Document-green)](https://www.mongodb.com/)
 [![Neo4j](https://img.shields.io/badge/Neo4j-Graph-red)](https://neo4j.com/)
 
+
 SmartMeal is a backend system for intelligent meal planning that demonstrates how **polyglot persistence** can be used to solve real-world coordination problems across heterogeneous data sources.  
 It integrates **PostgreSQL**, **MongoDB**, and **Neo4j** to support personalized meal planning, smart ingredient substitutions, pantry-aware shopping lists, and expiration-aware recommendations.
+
 ---
 
 ## Table of Contents
