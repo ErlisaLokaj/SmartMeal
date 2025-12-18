@@ -7,8 +7,6 @@ from bson import ObjectId
 from repositories import RecipeRepository
 from adapters.sql_adapter import get_user_allergy_ingredient_ids
 
-# NOTE: mongo_adapter still used for raw MongoDB operations in get_recipe_by_id and search_recipes
-# These could be refactored to use RecipeRepository methods instead
 from adapters import mongo_adapter
 
 logger = logging.getLogger("smartmeal.recipe")
@@ -42,19 +40,16 @@ def get_recipe_by_id(recipe_id: str) -> Optional[Dict[str, Any]]:
 
         recipes_collection = db["recipes"]
 
-        # Try ObjectId first, then fall back to string ID in a single query
         q = {"_id": recipe_id}
         try:
             from bson import ObjectId
 
             q = {"_id": ObjectId(recipe_id)}
         except Exception:
-            # If ObjectId conversion fails, use string ID
             pass
 
         doc = recipes_collection.find_one(q)
         if not doc:
-            # If ObjectId query failed, try with string ID
             if "_id" in q and isinstance(q["_id"], ObjectId):
                 doc = recipes_collection.find_one({"_id": recipe_id})
 
@@ -104,7 +99,6 @@ def search_recipes(
     if cuisine:
         or_cuisine: List[Dict[str, Any]] = []
         if _looks_like_uuid(cuisine):
-            # пользователь передал cuisine_id
             or_cuisine.append({"cuisine_id": cuisine})
         else:
             or_cuisine.extend(
@@ -114,11 +108,11 @@ def search_recipes(
                             "$regex": f"^{re.escape(cuisine)}$",
                             "$options": "i",
                         }
-                    },  # точное имя кухни (если поле есть)
+                    },
                     {
                         "tags": {"$elemMatch": {"$regex": cuisine, "$options": "i"}}
-                    },  # иногда кухня кладётся в теги
-                    {"title": {"$regex": cuisine, "$options": "i"}},  # как резерв
+                    },
+                    {"title": {"$regex": cuisine, "$options": "i"}},
                     {"slug": {"$regex": cuisine, "$options": "i"}},
                 ]
             )
@@ -157,7 +151,6 @@ def search_recipes(
     if user_id:
         disallowed_ids = list(get_user_allergy_ingredient_ids(user_id))
         if disallowed_ids:
-            # Use $nin directly on the ingredient_id field - simpler and more efficient
             and_clauses.append({"ingredients.ingredient_id": {"$nin": disallowed_ids}})
 
     mongo_query: Dict[str, Any] = {}

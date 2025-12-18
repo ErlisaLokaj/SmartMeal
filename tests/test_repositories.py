@@ -52,10 +52,7 @@ from domain.models import (
 )
 
 
-# =============================================================================
 # USER REPOSITORY TESTS
-# =============================================================================
-
 
 def test_user_repository_create_and_get(db_session: Session):
     """
@@ -168,10 +165,8 @@ def test_user_repository_delete(db_session: Session):
     assert not_deleted is False
 
 
-# =============================================================================
-# ALLERGY REPOSITORY TESTS
-# =============================================================================
 
+# ALLERGY REPOSITORY TESTS
 
 def test_allergy_repository_replace_all(db_session: Session):
     """
@@ -280,10 +275,7 @@ def test_allergy_repository_delete_operations(db_session: Session):
     assert len(current) == 0
 
 
-# =============================================================================
 # PREFERENCE REPOSITORY TESTS
-# =============================================================================
-
 
 def test_preference_repository_replace_all(db_session: Session):
     """
@@ -370,10 +362,7 @@ def test_preference_repository_delete_operations(db_session: Session):
     assert current[0].tag == "tag2"
 
 
-# =============================================================================
 # DIETARY PROFILE REPOSITORY TESTS
-# =============================================================================
-
 
 def test_dietary_profile_repository_upsert(db_session: Session):
     """
@@ -428,10 +417,8 @@ def test_dietary_profile_repository_upsert(db_session: Session):
     assert "mexican" in updated.cuisine_likes
 
 
-# =============================================================================
-# INGREDIENT SQL REPOSITORY TESTS
-# =============================================================================
 
+# INGREDIENT SQL REPOSITORY TESTS
 
 def test_ingredient_repository_get_or_create(db_session: Session):
     """
@@ -509,10 +496,7 @@ def test_ingredient_repository_bulk_create(db_session: Session):
         assert ingredient is not None
 
 
-# =============================================================================
 # PANTRY REPOSITORY TESTS
-# =============================================================================
-
 
 def test_pantry_repository_crud(db_session: Session):
     """
@@ -645,10 +629,7 @@ def test_pantry_repository_replace_all(db_session: Session):
     assert items[0].ingredient_id == ing3.ingredient_id
 
 
-# =============================================================================
 # SHOPPING LIST REPOSITORY TESTS
-# =============================================================================
-
 
 def test_shopping_list_item_repository_crud(db_session: Session):
     """
@@ -800,10 +781,7 @@ def test_shopping_list_bulk_create(db_session: Session):
     assert len(items) == 3
 
 
-# =============================================================================
 # WASTE REPOSITORY TESTS
-# =============================================================================
-
 
 def test_waste_repository_create_and_query(db_session: Session):
     """
@@ -850,10 +828,8 @@ def test_waste_repository_create_and_query(db_session: Session):
     assert len(recent_waste) >= 2
 
 
-# =============================================================================
-# COOKING LOG REPOSITORY TESTS
-# =============================================================================
 
+# COOKING LOG REPOSITORY TESTS
 
 def test_cooking_log_repository_create(db_session: Session):
     """

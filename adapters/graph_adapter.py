@@ -8,18 +8,12 @@ _driver = None
 
 
 def connect(uri: str, user: str, password: str):
-    """Initialize a neo4j driver.
-
-    If the driver package is unavailable, this becomes a no-op and the
-    other functions will use a fallback behavior.
-    """
+    """Initialize a neo4j driver."""
     global _driver
     try:
-        
-
         _driver = GraphDatabase.driver(uri, auth=(user, password))
         logger.info("Connected to Neo4j %s", uri)
-    except Exception as exc:  # pragma: no cover - driver optional in tests
+    except Exception as exc:
         _driver = None
         logger.warning(
             "Could not initialize neo4j driver: %s — falling back to stub", exc
@@ -41,22 +35,10 @@ def close():
 def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
     """
     Return ingredient metadata from Neo4j.
-
-    Expected return shape:
-      {
-        "name": "Chicken",
-        "category": "meat", 
-        "perishability": "perishable",
-        "proc_id": "some_id",
-        "defaults": {"shelf_life_days": 7}
-      }
-
     Args:
         ingredient_id: Ingredient ID (UUID as string, proc_id, or name)
-
     Returns:
         Dict with ingredient metadata
-
     Raises:
         RuntimeError: If Neo4j driver is not available
         ValueError: If ingredient not found in Neo4j
@@ -102,7 +84,6 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
                     "Please ensure the ingredient exists."
                 )
     except ValueError:
-        # Re-raise ValueError as is
         raise
     except Exception as e:
         logger.exception(f"Error querying Neo4j for ingredient {ingredient_id}")
@@ -114,15 +95,10 @@ def get_ingredient_meta(ingredient_id: str) -> Dict[str, Any]:
 def get_ingredients_batch(ingredient_ids: list) -> Dict[str, Dict[str, Any]]:
     """
     Batch fetch ingredient metadata for multiple ingredients.
-    
-    This avoids N+1 query problems when processing multiple ingredients.
-    
     Args:
         ingredient_ids: List of ingredient IDs (as strings or UUIDs)
-    
     Returns:
         Dict mapping ingredient_id to metadata dict
-        
     Raises:
         RuntimeError: If Neo4j driver is not available
         ValueError: If any requested ingredients are not found in Neo4j
@@ -196,14 +172,11 @@ def get_ingredients_batch(ingredient_ids: list) -> Dict[str, Dict[str, Any]]:
 def suggest_substitutes(ingredient_id: str, limit: int = 5):
     """
     Return a list of substitute ingredient IDs for a given ingredient.
-
     Args:
         ingredient_id: Ingredient ID to find substitutes for
         limit: Maximum number of substitutes to return (default: 5)
-
     Returns:
         List of substitute ingredient IDs
-
     Raises:
         RuntimeError: If Neo4j driver is not available
         ValueError: If ingredient not found or has no substitutes
@@ -240,13 +213,10 @@ def suggest_substitutes(ingredient_id: str, limit: int = 5):
 def get_substitutes_for_recipe(recipe_id: str):
     """
     Returns a list of ingredient substitutions for a specific recipe.
-    
     Args:
         recipe_id: Recipe ID to get substitutions for
-        
     Returns:
         Dict mapping ingredient names to list of substitute names
-        
     Raises:
         RuntimeError: If Neo4j driver is not available
     """
@@ -271,13 +241,10 @@ def get_substitutes_for_recipe(recipe_id: str):
 def get_disallowed_ingredient_ids(allergy_names):
     """
     Returns a list of ingredient IDs associated with allergies.
-    
     Args:
         allergy_names: List of allergy names
-        
     Returns:
         List of ingredient IDs that should be excluded
-        
     Raises:
         RuntimeError: If Neo4j driver is not available
     """

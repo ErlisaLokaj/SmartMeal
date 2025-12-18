@@ -56,7 +56,7 @@ class WasteByIngredient(BaseModel):
 class WasteTrend(BaseModel):
     """Waste trend data over time"""
 
-    period: str  # e.g., "2025-10", "2025-W44" (week), or "2025-10-31" (day)
+    period: str
     total_quantity: Decimal
     waste_count: int
 
@@ -68,7 +68,7 @@ class WasteInsightsResponse(BaseModel):
     total_quantity: Decimal
     most_wasted_ingredients: List[WasteByIngredient]
     waste_trends: List[WasteTrend]
-    common_reasons: List[Dict[str, Any]]  # [{reason: str, count: int}, ...]
+    common_reasons: List[Dict[str, Any]]
     horizon_days: int
 
     model_config = {"from_attributes": True}

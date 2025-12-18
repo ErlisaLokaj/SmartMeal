@@ -1,6 +1,5 @@
 """
 Save-me-first Service - Prevents food waste by suggesting recipes for expiring ingredients.
-Implements use case 10 (Save-me-first Suggestions).
 """
 
 from typing import Dict, Any, List, Tuple
@@ -40,24 +39,11 @@ class SaveMeFirstService:
         """
         Generate save-me-first suggestions for a user based on expiring pantry items.
 
-        This is the main method that implements the food waste prevention use case:
         1. Find expiring pantry items
         2. Categorize by urgency (critical/urgent/soon)
         3. Search for recipes using these ingredients
         4. Rank recipes by match score, urgency, and user preferences
         5. Return top suggestions with actionable tips
-
-        Args:
-            db: Database session
-            user_id: User's UUID
-            days_threshold: Days before expiry to consider (default: 3)
-            max_suggestions: Maximum number of recipe suggestions (default: 5)
-
-        Returns:
-            SaveMeFirstResponse with expiring items and recipe suggestions
-
-        Raises:
-            NotFoundError: If user not found
         """
         # Step 1: Verify user exists
         user_repo = UserRepository(db)
@@ -209,32 +195,19 @@ class SaveMeFirstService:
            - User preferences and constraints
            - Recipe complexity/effort
         4. Rank and return top suggestions
-
-        Args:
-            db: Database session
-            user_id: User's UUID
-            expiring_ingredients: List of expiring ingredients
-            max_suggestions: Maximum number of recipes to return
-
-        Returns:
-            List of RecipeSuggestion objects, ranked by relevance
         """
         if not expiring_ingredients:
             return []
 
-        # Get user's full pantry for availability checking
         pantry_repo = PantryRepository(db)
         all_pantry_items = pantry_repo.get_by_user_id(user_id)
         pantry_ingredient_ids = {str(item.ingredient_id) for item in all_pantry_items}
 
-        # Extract expiring ingredient IDs (prioritize by urgency)
         expiring_ids = [str(ei.ingredient_id) for ei in expiring_ingredients]
 
-        # Search for recipes using expiring ingredients
-        # We'll search multiple times with different ingredient combinations
-        recipes_found = {}  # recipe_id -> recipe_dict
 
-        # Search with critical ingredients first
+        recipes_found = {}
+
         critical_ids = [
             str(ei.ingredient_id)
             for ei in expiring_ingredients
@@ -251,7 +224,6 @@ class SaveMeFirstService:
             for recipe in results:
                 recipes_found[recipe["id"]] = recipe
 
-        # Search with urgent + critical
         urgent_ids = [
             str(ei.ingredient_id)
             for ei in expiring_ingredients
@@ -263,12 +235,11 @@ class SaveMeFirstService:
                 q=None,
                 limit=20,
                 offset=0,
-                include_ingredient_ids=urgent_ids[:5],  # Top 5 urgent
+                include_ingredient_ids=urgent_ids[:5],
             )
             for recipe in results:
                 recipes_found[recipe["id"]] = recipe
 
-        # Search with all expiring ingredients
         if len(recipes_found) < max_suggestions * 2:
             results = search_recipes(
                 user_id=str(user_id),
@@ -302,7 +273,7 @@ class SaveMeFirstService:
             uses_expiring_count = len(uses_expiring)
 
             if uses_expiring_count == 0:
-                continue  # Skip recipes that don't use any expiring ingredients
+                continue
 
             # Get names of expiring ingredients used
             expiring_used_names = [
@@ -311,7 +282,6 @@ class SaveMeFirstService:
                 if str(ei.ingredient_id) in uses_expiring
             ]
 
-            # Check if can cook now
             missing_ingredients = recipe_ingredient_ids - pantry_ingredient_ids
             missing_count = len(missing_ingredients)
             can_cook_now = missing_count == 0
@@ -345,9 +315,9 @@ class SaveMeFirstService:
         # Sort by combined score (urgency * 0.6 + match * 0.4), then by can_cook_now
         scored_recipes.sort(
             key=lambda r: (
-                -(r.urgency_score * 0.6 + r.match_score * 0.4),  # Higher is better
-                not r.can_cook_now,  # Can cook now first
-                r.missing_ingredients_count,  # Fewer missing is better
+                -(r.urgency_score * 0.6 + r.match_score * 0.4),
+                not r.can_cook_now,
+                r.missing_ingredients_count,
             )
         )
 
@@ -362,26 +332,15 @@ class SaveMeFirstService:
     ) -> float:
         """
         Calculate how well a recipe matches the user's needs.
-
-        Factors:
-        - Percentage of recipe using expiring ingredients (higher is better)
-        - Can cook now (bonus)
-        - Recipe complexity (simpler is better for urgency)
-
-        Returns:
-            Score from 0-100
         """
         if total_ingredients == 0:
             return 0.0
 
-        # Base score: percentage of recipe using expiring items
         base_score = (uses_expiring_count / total_ingredients) * 100
 
-        # Bonus for being able to cook now
         if can_cook_now:
             base_score += 20
 
-        # Cap at 100
         return min(100.0, base_score)
 
     @staticmethod
@@ -406,7 +365,6 @@ class SaveMeFirstService:
             if str(ei.ingredient_id) in uses_expiring:
                 total_urgency += urgency_weights.get(ei.urgency_level, 0)
 
-        # Average urgency, capped at 100
         return min(100.0, total_urgency / len(uses_expiring))
 
     @staticmethod

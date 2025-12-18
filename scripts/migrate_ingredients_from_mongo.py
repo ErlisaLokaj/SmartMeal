@@ -1,20 +1,11 @@
 """
 Migration script: Bulk import ingredients from MongoDB to PostgreSQL
-
-This is a one-time migration script that imports all unique ingredients
-from the MongoDB ingredient_master collection to the PostgreSQL database.
-
-Safe to run multiple times - won't create duplicates.
-
-Usage:
-    python scripts/migrate_ingredients_from_mongo.py
 """
 
 import logging
 import sys
 from pathlib import Path
 
-# Add parent directory to path to import from project
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from domain.models import SessionLocal, Ingredient
@@ -32,7 +23,7 @@ def bulk_import_from_mongo():
     """
     logger.info("Starting bulk import from MongoDB")
 
-    # Get MongoDB database
+
     try:
         mongo_db = mongo_adapter._get_db()
         logger.info("Got MongoDB connection")
@@ -63,7 +54,6 @@ def bulk_import_from_mongo():
 
     stats = {"created": 0, "existing": 0, "errors": 0}
 
-    # Get database session
     logger.info("Connecting to PostgreSQL...")
     try:
         with SessionLocal() as db:
@@ -72,7 +62,7 @@ def bulk_import_from_mongo():
                 if i % 100 == 0:
                     logger.info(f"Processing ingredient {i}/{len(ingredients_mongo)}")
 
-                name = ing_doc.get("_id")  # Name is in _id field
+                name = ing_doc.get("_id")
 
                 if not name:
                     stats["errors"] += 1

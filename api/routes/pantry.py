@@ -64,23 +64,11 @@ def update_pantry_item_quantity(
 ):
     """
     Update quantity of a specific pantry item.
-
-    Use this for:
-    - Consuming ingredients during cooking (negative quantity_change)
-    - Adding more of the same batch (positive quantity_change)
-    - Adjusting quantities found in pantry
-
-    If quantity reaches 0, the item is automatically deleted.
-
-    Examples:
-    - Consumed 500ml milk: {"quantity_change": -0.5, "reason": "cooking"}
-    - Found extra can: {"quantity_change": 1, "reason": "found_more"}
     """
     updated_item = PantryService.update_quantity(
         db, pantry_item_id, update.quantity_change, update.reason
     )
     if updated_item is None:
-        # Item was auto-deleted because quantity reached 0
         return {"status": "deleted", "reason": "quantity_reached_zero"}
     return PantryItemResponse.model_validate(updated_item)
 
@@ -98,18 +86,6 @@ def get_expiring_soon(
 ):
     """
     Get pantry items expiring within the specified number of days.
-
-    This helps users:
-    - Prioritize which ingredients to use first (FIFO/FEFO)
-    - Prevent food waste by cooking expiring items
-    - Plan meals based on what needs to be used soon
-
-    Returns items ordered by expiry date (oldest first).
-    Items without expiry dates are excluded.
-
-    Examples:
-    - GET /pantry/expiring-soon?user_id={id}&days=3 - Items expiring in next 3 days
-    - GET /pantry/expiring-soon?user_id={id}&days=7 - Items expiring in next week
     """
     items = PantryService.get_expiring_soon(db, user_id, days)
     return [PantryItemResponse.model_validate(i) for i in items]

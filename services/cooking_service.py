@@ -1,6 +1,5 @@
 """
 Cooking Service - Handles recipe cooking, pantry decrement, and logging.
-Implements use case 8 (Cook Recipe - Auto-Decrement).
 """
 
 from typing import Dict, Any, List, Tuple
@@ -44,9 +43,6 @@ class CookingService:
         """
         Cook a recipe: validate, decrement pantry, log cooking, and return response.
 
-        This implements the comprehensive "Cook Recipe (Auto-Decrement)" use case
-        with full validation, FIFO pantry management, and enhanced user feedback.
-
         Flow:
         1. Verify user exists
         2. Retrieve and validate recipe from MongoDB
@@ -55,19 +51,6 @@ class CookingService:
         5. Decrement pantry items (FIFO, transaction-safe)
         6. Log cooking activity
         7. Generate comprehensive response with tips and insights
-
-        Args:
-            db: Database session
-            user_id: User's UUID
-            recipe_id: Recipe ID (string from MongoDB)
-            servings: Number of servings (1-20)
-
-        Returns:
-            CookRecipeResponse with detailed cooking results, shortages, nutrition, tips
-
-        Raises:
-            NotFoundError: If user or recipe not found
-            ServiceValidationError: If validation fails (allergies, ingredients, etc.)
         """
         # Step 1: Verify user exists
         user_repo = UserRepository(db)
@@ -106,7 +89,6 @@ class CookingService:
         )
 
         if shortages:
-            # User doesn't have all ingredients - cannot cook
             shortage_list = ", ".join([s.ingredient_name for s in shortages[:3]])
             if len(shortages) > 3:
                 shortage_list += f" and {len(shortages) - 3} more"
@@ -116,7 +98,7 @@ class CookingService:
                 f"Please add these ingredients to your pantry or create a shopping list first."
             )
 
-        # Step 6: Decrement pantry with FIFO logic (we know we have everything)
+        # Step 6: Decrement pantry with FIFO logic
         try:
             CookingService._decrement_pantry_for_recipe(
                 db, user_id, recipe, servings, ingredient_metadata
@@ -133,9 +115,9 @@ class CookingService:
 
             db.commit()
 
-            # Step 8: Generate comprehensive response (no shortages since we validated)
+            # Step 8: Generate comprehensive response
             return CookingService._generate_cook_response(
-                recipe, servings, [], ingredient_metadata  # Empty shortages list
+                recipe, servings, [], ingredient_metadata
             )
 
         except Exception as e:
@@ -151,21 +133,12 @@ class CookingService:
     ) -> None:
         """
         Validate if recipe is suitable for user based on allergies.
-
-        Args:
-            db: Database session
-            user_id: User's UUID
-            recipe: Recipe dict with ingredients
-
-        Raises:
-            ServiceValidationError: If recipe contains allergens
         """
         user_repo = UserRepository(db)
         user = user_repo.get_by_id(user_id)
         if not user or not user.allergies:
-            return  # No allergies to check
+            return
 
-        # Check allergies
         user_allergen_ids = {str(allergy.ingredient_id) for allergy in user.allergies}
         recipe_ingredient_ids = {
             ing.get("ingredient_id") for ing in recipe.get("ingredients", [])
@@ -187,15 +160,6 @@ class CookingService:
     ) -> Dict[str, Dict[str, Any]]:
         """
         Validate all recipe ingredients exist in Neo4j in a single batch query.
-
-        Args:
-            ingredient_ids: List of ingredient UUIDs
-
-        Returns:
-            Dict mapping ingredient_id (str) to metadata dict
-
-        Raises:
-            ServiceValidationError: If Neo4j unavailable or ingredients not found
         """
         if not ingredient_ids:
             return {}
@@ -223,19 +187,6 @@ class CookingService:
     ) -> List[IngredientShortage]:
         """
         Check if user has all required ingredients in pantry WITHOUT modifying it.
-
-        This is a read-only check to validate before cooking.
-
-        Args:
-            db: Database session
-            user_id: User's UUID
-            recipe: Recipe dict with ingredients
-            servings: Number of servings
-            ingredient_metadata: Ingredient metadata from Neo4j
-
-        Returns:
-            List of IngredientShortage objects for missing/insufficient items
-            Empty list if user has everything needed
         """
         ingredients = recipe.get("ingredients", [])
         pantry_repo = PantryRepository(db)
@@ -247,7 +198,7 @@ class CookingService:
             required_qty = base_qty * servings
             unit = ingredient.get("unit", "")
 
-            # Get pantry items for this ingredient (read-only)
+            # Get pantry items for this ingredient
             pantry_items = pantry_repo.get_items_for_decrement(
                 user_id, ingredient_id, unit
             )
@@ -284,25 +235,6 @@ class CookingService:
     ) -> None:
         """
         Decrement pantry quantities for recipe ingredients using FIFO logic.
-
-        This implements batch-aware FIFO inventory management:
-        - Consumes oldest items first (based on best_before date)
-        - Handles multiple pantry batches per ingredient
-        - Auto-removes items when quantity reaches 0
-
-        IMPORTANT: This method assumes availability has been pre-checked.
-        It will not fail if shortages occur (defensive programming).
-
-        Args:
-            db: Database session
-            user_id: User's UUID
-            recipe: Recipe dict with ingredients
-            servings: Number of servings
-            ingredient_metadata: Ingredient metadata from Neo4j
-
-        Note:
-            This method assumes it's called within a transaction that will be
-            committed or rolled back by the caller.
         """
         ingredients = recipe.get("ingredients", [])
         pantry_repo = PantryRepository(db)
@@ -350,7 +282,6 @@ class CookingService:
 
                 remaining_needed -= to_decrement
 
-            # Defensive check - this should not happen if pre-check was done
             if remaining_needed > 0:
                 logger.warning(
                     f"Unexpected shortage for ingredient {ingredient_id}: "
@@ -368,29 +299,17 @@ class CookingService:
     ) -> CookRecipeResponse:
         """
         Generate comprehensive cooking response with tips and insights.
-
-        Args:
-            recipe: Recipe dict
-            servings: Number of servings
-            shortages: List of ingredient shortages
-            ingredient_metadata: Ingredient metadata from Neo4j
-
-        Returns:
-            CookRecipeResponse with all details
         """
         recipe_name = recipe.get("name", "Unknown Recipe")
 
-        # Nutritional summary
+
         nutritional_summary = None
         if "nutrition" in recipe and recipe["nutrition"]:
-            # Handle nested nutrition structure (e.g. {"per_serving": {...}})
             base_nutrition = recipe["nutrition"]
             if "per_serving" in base_nutrition:
                 base_nutrition = base_nutrition["per_serving"]
 
-            # Calculate total nutrition for the cooked servings
-            # Assuming base_nutrition is per 1 serving
-            # Keys in MongoDB are: kcal, protein_g, carb_g, fat_g
+
             nutritional_summary = NutritionalSummary(
                 kcal=(
                     base_nutrition.get("kcal", base_nutrition.get("calories", 0)) or 0
@@ -409,7 +328,6 @@ class CookingService:
                 * servings,
             )
 
-        # Waste prevention tips
         waste_prevention_tips = [
             "Store leftovers in airtight containers within 2 hours of cooking",
             "Label containers with date and contents for easy identification",
@@ -417,13 +335,11 @@ class CookingService:
             "Plan meals to use similar ingredients across multiple recipes",
         ]
 
-        # Personalized suggestions
         suggestions = []
         cuisine = recipe.get("cuisine")
         if cuisine:
             suggestions.append(f"Enjoyed this? Try exploring more {cuisine} recipes!")
 
-        # Add shortage-based suggestions
         if shortages:
             shortage_names = [s.ingredient_name for s in shortages[:3]]
             suggestions.append(
@@ -434,7 +350,6 @@ class CookingService:
                 "Great! You had all ingredients needed. Your pantry is well-stocked!"
             )
 
-        # Cuisine-specific tips
         if cuisine:
             cuisine_lower = cuisine.lower()
             if "italian" in cuisine_lower:
@@ -450,7 +365,6 @@ class CookingService:
                     "Leftover beans and rice make excellent burrito fillings"
                 )
 
-        # Success message
         if shortages:
             message = (
                 f"Cooked '{recipe_name}' for {servings} servings, "
@@ -467,7 +381,7 @@ class CookingService:
             pantry_updated=True,
             shortages=shortages,
             nutritional_summary=nutritional_summary,
-            waste_prevention_tips=waste_prevention_tips[:5],  # Top 5 tips
+            waste_prevention_tips=waste_prevention_tips[:5],
             suggestions=suggestions,
         )
 
@@ -616,25 +530,6 @@ class CookingService:
     ) -> RecipeShoppingListResponse:
         """
         Generate a shopping list for a specific recipe based on what's missing in pantry.
-
-        This allows users to:
-        1. Choose a recipe they want to cook
-        2. See what ingredients they need to buy
-        3. Shop for missing ingredients
-        4. Then cook the recipe once they have everything
-
-        Args:
-            db: Database session
-            user_id: User's UUID
-            recipe_id: Recipe ID (string from MongoDB)
-            servings: Number of servings to prepare
-
-        Returns:
-            RecipeShoppingListResponse with missing ingredients
-
-        Raises:
-            NotFoundError: If user or recipe not found
-            ServiceValidationError: If validation fails
         """
         # Step 1: Verify user exists
         user_repo = UserRepository(db)

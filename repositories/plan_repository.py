@@ -35,7 +35,6 @@ class PlanRepository:
         rows = self.db.execute(text(sql), {"uid": str(user_id)}).mappings().all()
         return [dict(r) for r in rows]
 
-    # ---------- insertions ----------
 
     def insert_meal_plan(
         self, user_id: uuid.UUID, starts_on: date, ends_on: date
@@ -88,7 +87,6 @@ class PlanRepository:
             },
         )
 
-    # ---------- queries ----------
 
     def list_user_plans(self, user_id: uuid.UUID) -> List[Dict[str, Any]]:
         """Get all meal plans for a specific user with entry counts."""

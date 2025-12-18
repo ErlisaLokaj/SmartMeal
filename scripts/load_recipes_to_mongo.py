@@ -1,11 +1,5 @@
-#!/usr/bin/env python3
 """
 Load recipes from recipes_structured.json into MongoDB.
-This script populates the MongoDB recipes collection with structured recipe data.
-
-Usage:
-    python scripts/load_recipes_to_mongo.py          # Interactive mode
-    python scripts/load_recipes_to_mongo.py --auto   # Auto mode (skip if exists)
 """
 
 import sys
@@ -14,7 +8,6 @@ import logging
 import argparse
 from pathlib import Path
 
-# Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logging.basicConfig(
@@ -29,7 +22,6 @@ def load_recipes_to_mongodb(auto_mode=False):
         import adapters.mongo_adapter as mongo_adapter
         from app.config import MONGO_URI, MONGO_DB
 
-        # Connect to MongoDB
         logger.info("Connecting to MongoDB...")
         mongo_adapter.connect(MONGO_URI, MONGO_DB)
 
@@ -39,7 +31,6 @@ def load_recipes_to_mongodb(auto_mode=False):
 
         logger.info("✓ Connected to MongoDB")
 
-        # Load recipes from JSON file
         recipes_file = Path(__file__).parent.parent / "data" / "recipes_structured.json"
 
         if not recipes_file.exists():
@@ -55,7 +46,6 @@ def load_recipes_to_mongodb(auto_mode=False):
 
         logger.info(f"✓ Loaded {len(recipes)} recipes from file")
 
-        # Check if recipes already exist
         existing_count = db.recipes.count_documents({})
         if existing_count > 0:
             if auto_mode:
@@ -77,12 +67,10 @@ def load_recipes_to_mongodb(auto_mode=False):
                 elif response == "1":
                     logger.info("Skipping recipe import")
                     return True
-                # Option 3 will just insert new recipes
 
-        # Insert recipes into MongoDB
+
         logger.info("Inserting recipes into MongoDB...")
 
-        # Insert in batches for better performance
         batch_size = 100
         inserted_count = 0
         skipped_count = 0
@@ -97,9 +85,7 @@ def load_recipes_to_mongodb(auto_mode=False):
                     f"✓ Inserted batch {i//batch_size + 1}: {len(result.inserted_ids)} recipes"
                 )
             except Exception as e:
-                # Some recipes might already exist (duplicate _id)
                 if "duplicate key error" in str(e).lower():
-                    # Try inserting one by one to count successes
                     for recipe in batch:
                         try:
                             db.recipes.insert_one(recipe)
@@ -110,9 +96,7 @@ def load_recipes_to_mongodb(auto_mode=False):
                     logger.error(f"Error inserting batch: {e}")
                     continue
 
-        # Create indexes for better query performance
         logger.info("Creating indexes...")
-        # Note: _id is already unique by default, no need to create index
         db.recipes.create_index("title")
         db.recipes.create_index("cuisine_id")
         db.recipes.create_index("tags")
@@ -152,7 +136,6 @@ def load_recipes_to_mongodb(auto_mode=False):
 
 
 if __name__ == "__main__":
-    # Parse command line arguments
     parser = argparse.ArgumentParser(
         description="Load recipes from recipes_structured.json into MongoDB"
     )

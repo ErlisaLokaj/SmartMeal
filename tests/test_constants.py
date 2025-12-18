@@ -8,9 +8,8 @@ nutrition data, and user profiles to make tests more meaningful and maintainable
 from decimal import Decimal
 from datetime import date, timedelta
 
-# =============================================================================
+
 # USER PROFILES - Realistic personas with diverse backgrounds
-# =============================================================================
 
 REALISTIC_USERS = {
     "sarah": {
@@ -55,9 +54,8 @@ REALISTIC_USERS = {
     },
 }
 
-# =============================================================================
+
 # INGREDIENT QUANTITIES - Based on typical household amounts
-# =============================================================================
 
 # Grains & Starches (typical pantry stock)
 GRAINS = {
@@ -116,9 +114,8 @@ FRUITS = {
     "strawberry": {"quantity": Decimal("250"), "unit": "g"},  # 1 container
 }
 
-# =============================================================================
+
 # WASTE QUANTITIES - Realistic food waste amounts
-# =============================================================================
 
 # Common waste scenarios (typically smaller than purchase amounts)
 WASTE_AMOUNTS = {
@@ -130,9 +127,8 @@ WASTE_AMOUNTS = {
     "wilted_lettuce": Decimal("100"),  # Portion of salad greens
 }
 
-# =============================================================================
+
 # RECIPE NUTRITION - Realistic per-serving values
-# =============================================================================
 
 RECIPE_NUTRITION = {
     "light_meal": {  # Salad, soup
@@ -161,9 +157,8 @@ RECIPE_NUTRITION = {
     },
 }
 
-# =============================================================================
+
 # EXPIRATION DATES - Realistic shelf life
-# =============================================================================
 
 
 def get_expiration_date(food_type: str) -> date:
@@ -194,9 +189,7 @@ def get_expiration_date(food_type: str) -> date:
     return today + timedelta(days=days)
 
 
-# =============================================================================
 # CUISINE PREFERENCES - Realistic cuisine types
-# =============================================================================
 
 CUISINES = {
     "popular": ["italian", "asian", "mexican", "american"],
@@ -205,9 +198,8 @@ CUISINES = {
     "spicy": ["indian", "thai", "mexican", "korean"],
 }
 
-# =============================================================================
+
 # DIETARY TAGS - Common dietary preferences
-# =============================================================================
 
 DIETARY_TAGS = {
     "restrictions": ["vegetarian", "vegan", "gluten_free", "dairy_free", "nut_free"],
@@ -216,9 +208,8 @@ DIETARY_TAGS = {
     "occasions": ["breakfast", "lunch", "dinner", "snack", "dessert"],
 }
 
-# =============================================================================
+
 # COMMON ALLERGIES - Top 9 allergens
-# =============================================================================
 
 COMMON_ALLERGENS = [
     "peanut",

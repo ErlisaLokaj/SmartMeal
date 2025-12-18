@@ -49,12 +49,10 @@ class IngredientSQLRepository(BaseRepository[Ingredient]):
         """
         normalized_name = name.lower().strip()
 
-        # Try to find existing
         ingredient = self.get_by_name(normalized_name)
         if ingredient:
             return ingredient
 
-        # Create new if not found
         ingredient = Ingredient(name=normalized_name)
         self.db.add(ingredient)
 
@@ -63,9 +61,7 @@ class IngredientSQLRepository(BaseRepository[Ingredient]):
             self.db.refresh(ingredient)
             return ingredient
         except IntegrityError:
-            # Race condition - another request created it
             self.db.rollback()
-            # Fetch the one that was created
             return self.get_by_name(normalized_name)
 
     def get_all(self, skip: int = 0, limit: int = 100) -> List[Ingredient]:
@@ -104,27 +100,21 @@ class IngredientSQLRepository(BaseRepository[Ingredient]):
         for name in names:
             normalized_name = name.lower().strip()
 
-            # Check if exists
             ingredient = self.get_by_name(normalized_name)
 
             if ingredient:
                 results.append(ingredient)
             else:
-                # Create new
                 ingredient = Ingredient(name=normalized_name)
                 self.db.add(ingredient)
-                results.append(ingredient)  # Add the new ingredient to results
+                results.append(ingredient)
 
-        # Commit all at once
         try:
             self.db.commit()
-            # Refresh all new items
             for ingredient in results:
                 self.db.refresh(ingredient)
         except IntegrityError:
-            # Handle race conditions
             self.db.rollback()
-            # Re-fetch all
             results = [self.get_by_name(name.lower().strip()) for name in names]
 
         return results

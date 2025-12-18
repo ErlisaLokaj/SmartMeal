@@ -1,15 +1,13 @@
--- -----------------------------
+
 -- 1) Users
--- -----------------------------
 INSERT INTO app_user (user_id, email, full_name, created_at, updated_at)
 VALUES
     ('11111111-1111-1111-1111-111111111111', 'demo@smartmeal.io',  'Demo User',    NOW(), NOW()),
     ('22222222-2222-2222-2222-222222222222', 'demo2@smartmeal.io', 'Demo User 2',  NOW(), NOW())
 ON CONFLICT (user_id) DO NOTHING;
 
--- -----------------------------
+
 -- 2) Ingredients
--- ----------------------------
 INSERT INTO ingredient (ingredient_id, name, category, is_allergen, created_at, updated_at)
 VALUES
     ('87bfc225-7ba8-45db-96c9-7fee29ed6a28', 'whole chicken', 'protein', true,  NOW(), NOW()),
@@ -24,16 +22,14 @@ VALUES
     ('88a7634a-6474-4b36-946e-fb9ed96ecbe6', 'broken nuts (pecans)', 'nuts', true, NOW(), NOW())
 ON CONFLICT (ingredient_id) DO NOTHING;
 
--- -----------------------------
+
 -- 3) Allergy (Demo user allergic to chicken)
--- -----------------------------
 INSERT INTO user_allergy (user_id, ingredient_id)
 VALUES
     ( '11111111-1111-1111-1111-111111111111', '87bfc225-7ba8-45db-96c9-7fee29ed6a28');
 
--- -----------------------------
+
 -- 4) Dietary profile
--- -----------------------------
 INSERT INTO dietary_profile (
     user_id,
     goal,
@@ -82,9 +78,8 @@ ON CONFLICT (user_id) DO UPDATE SET
                                     cuisine_dislikes = EXCLUDED.cuisine_dislikes,
                                     updated_at = NOW();
 
--- -----------------------------
+
 -- 5) User preferences
--- -----------------------------
 INSERT INTO user_preference (user_id, tag, strength)
 VALUES
     ('11111111-1111-1111-1111-111111111111', 'quick',      'LIKE'),
@@ -92,9 +87,8 @@ VALUES
     ('11111111-1111-1111-1111-111111111111', 'spicy',      'AVOID')
 ON CONFLICT DO NOTHING;
 
--- -----------------------------
+
 -- 6) Pantry items
--- -----------------------------
 INSERT INTO pantry_item (pantry_item_id, user_id, ingredient_id, quantity, unit, best_before, source, created_at, updated_at)
 VALUES
     ('11111111-aaaa-aaaa-aaaa-111111111111', '11111111-1111-1111-1111-111111111111', '87bfc225-7ba8-45db-96c9-7fee29ed6a28', 1,    'unit', CURRENT_DATE + 2,  'seed', NOW(), NOW()),

@@ -1,6 +1,5 @@
 """
 Application configuration with Pydantic Settings for validation and type safety.
-Supports environment-specific configurations and .env file loading.
 """
 
 import os
@@ -123,7 +122,7 @@ class Settings(BaseSettings):
 # Global settings instance
 settings = Settings()
 
-# Legacy support - export individual values for backward compatibility
+# Legacy support; export individual values for backward compatibility
 POSTGRES_DB_URL = settings.postgres_db_url
 NEO4J_URI = settings.neo4j_uri
 NEO4J_USER = settings.neo4j_user

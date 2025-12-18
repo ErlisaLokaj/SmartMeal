@@ -1,6 +1,5 @@
 """
 Recipe routes - Recipe search and retrieval endpoints.
-Implements use cases 3 (recipe search) and 6 (recipe viewing).
 """
 
 from fastapi import APIRouter, Query, HTTPException
@@ -29,7 +28,6 @@ def search_recipes_endpoint(
 ) -> List[Dict[str, Any]]:
     """
     Search recipes with filters.
-
     - **q**: Search in title and ingredient names
     - **cuisine**: Filter by cuisine type
     - **include**: Must contain this ingredient
@@ -58,10 +56,8 @@ def search_recipes_endpoint(
 def get_recipe(recipe_id: str) -> Dict[str, Any]:
     """
     Get a single recipe by ID.
-
     Returns full recipe details including ingredients, steps, and nutrition.
     """
-    # Validate recipe_id format (UUID or MongoDB ObjectId)
     if not recipe_id or len(recipe_id) > 100:
         raise HTTPException(status_code=400, detail="Invalid recipe ID format")
 

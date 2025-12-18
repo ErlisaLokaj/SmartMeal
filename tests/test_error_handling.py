@@ -39,10 +39,8 @@ from domain.schemas.profile_schemas import (
 from app.exceptions import NotFoundError, ServiceValidationError
 
 
-# =============================================================================
-# VALIDATION ERROR TESTS
-# =============================================================================
 
+# VALIDATION ERROR TESTS
 
 def test_user_duplicate_email(db_session: Session):
     """
@@ -54,12 +52,10 @@ def test_user_duplicate_email(db_session: Session):
     """
     repo = UserRepository(db_session)
 
-    # Create first user
     email = unique_email("duplicate")
     user1 = repo.create_user(email=email, full_name="Sarah Martinez")
     assert user1.user_id is not None
 
-    # Try to create second user with same email
     with pytest.raises(ServiceValidationError):
         user2 = repo.create_user(email=email, full_name="Emma Johnson")
 
@@ -101,7 +97,6 @@ def test_pantry_missing_ingredient_validation(db_session: Session):
     user = ProfileService.create_user(db_session, unique_email("raj"), "Raj Patel")
     fake_ing_id = uuid.uuid4()
 
-    # Mock Neo4j to return None (ingredient not found)
     with patch.object(PantryService, "validate_ingredient_data") as mock_validate:
         mock_validate.return_value = None
 
@@ -153,8 +148,7 @@ def test_waste_invalid_reason(db_session: Session):
         )
         assert waste.reason == "expired"
 
-    # Invalid reason - currently no validation, but should add
-    # This documents expected future behavior
+
     with patch.object(WasteService, "validate_waste_data") as mock_validate:
         mock_validate.return_value = {
             "ingredient_id": ing.ingredient_id,
@@ -176,13 +170,9 @@ def test_waste_invalid_reason(db_session: Session):
             waste_data,
         )
         assert waste.reason == "invalid_reason"
-        # TODO: Add validation to restrict to valid reasons
 
 
-# =============================================================================
 # NOT FOUND ERROR TESTS
-# =============================================================================
-
 
 def test_get_nonexistent_user(db_session: Session):
     """
@@ -229,10 +219,7 @@ def test_delete_nonexistent_user(db_session: Session):
     assert deleted is False
 
 
-# =============================================================================
 # RACE CONDITION TESTS
-# =============================================================================
-
 
 def test_ingredient_concurrent_creation(db_session: Session):
     """
@@ -247,15 +234,11 @@ def test_ingredient_concurrent_creation(db_session: Session):
     """
     repo = IngredientSQLRepository(db_session)
 
-    # Create first ingredient
     ing1 = repo.get_or_create("concurrent_test")
     assert ing1.name == "concurrent_test"
 
-    # Simulate race condition by trying to create again
-    # In real scenario, IntegrityError would be raised and caught
     ing2 = repo.get_or_create("concurrent_test")
 
-    # Should return same ingredient
     assert ing2.ingredient_id == ing1.ingredient_id
 
 
@@ -269,7 +252,6 @@ def test_user_concurrent_preference_updates(db_session: Session):
     """
     user = ProfileService.create_user(db_session, unique_email("raj"), "Raj Patel")
 
-    # Set initial preferences
     ProfileService.set_preferences(
         db_session,
         user.user_id,
@@ -278,7 +260,6 @@ def test_user_concurrent_preference_updates(db_session: Session):
         ],
     )
 
-    # Update preferences (simulates concurrent update)
     ProfileService.set_preferences(
         db_session,
         user.user_id,
@@ -286,17 +267,12 @@ def test_user_concurrent_preference_updates(db_session: Session):
             PreferenceCreate(tag="tag2", strength="love"),
         ],
     )
-
-    # Verify last write
     prefs = ProfileService.get_preferences(db_session, user.user_id)
     assert len(prefs) == 1
     assert prefs[0].tag == "tag2"
 
 
-# =============================================================================
 # TRANSACTION ROLLBACK TESTS
-# =============================================================================
-
 
 def test_pantry_set_rollback_on_error(db_session: Session):
     """
@@ -312,7 +288,6 @@ def test_pantry_set_rollback_on_error(db_session: Session):
     ing1 = IngredientService.get_or_create_ingredient(db_session, "item1")
     ing2 = IngredientService.get_or_create_ingredient(db_session, "item2")
 
-    # Add initial pantry items
     with patch.object(PantryService, "validate_ingredients_batch") as mock_batch:
         mock_batch.return_value = {
             str(ing1.ingredient_id): {
@@ -338,9 +313,8 @@ def test_pantry_set_rollback_on_error(db_session: Session):
     initial_pantry = PantryService.get_pantry(db_session, user.user_id)
     assert len(initial_pantry) == 1
 
-    # Try to update with error (mock validation failure)
     with patch.object(PantryService, "validate_ingredients_batch") as mock_batch:
-        mock_batch.return_value = None  # Causes error
+        mock_batch.return_value = None
 
         try:
             PantryService.set_pantry(
@@ -357,16 +331,12 @@ def test_pantry_set_rollback_on_error(db_session: Session):
         except Exception:
             db_session.rollback()
 
-    # Pantry should be unchanged
     current_pantry = PantryService.get_pantry(db_session, user.user_id)
     assert len(current_pantry) == 1
     assert current_pantry[0].ingredient_id == ing1.ingredient_id
 
 
-# =============================================================================
 # BOUNDARY CONDITION TESTS
-# =============================================================================
-
 
 def test_dietary_profile_null_fields(db_session: Session):
     """
@@ -378,7 +348,6 @@ def test_dietary_profile_null_fields(db_session: Session):
     """
     user = ProfileService.create_user(db_session, unique_email("emma"), "Emma Johnson")
 
-    # Create with only required fields (goal and activity)
     profile_data = DietaryProfileCreate(
         goal="maintenance",
         activity="moderate",
@@ -389,10 +358,9 @@ def test_dietary_profile_null_fields(db_session: Session):
     )
     dietary = ProfileService.set_dietary_profile(db_session, user.user_id, profile_data)
 
-    # Verify required fields are set
     assert dietary.goal == "maintenance"
     assert dietary.activity == "moderate"
-    # Verify optional fields are NULL
+
     assert dietary.kcal_target is None
     assert dietary.protein_target_g is None
     assert dietary.carb_target_g is None
@@ -418,7 +386,6 @@ def test_pantry_far_future_expiration(db_session: Session):
             "defaults": {},
         }
 
-        # Add item expiring in 5 years
         item_data = PantryItemCreate(
             ingredient_id=ing.ingredient_id,
             quantity=Decimal("1"),
@@ -427,12 +394,10 @@ def test_pantry_far_future_expiration(db_session: Session):
         )
         item = PantryService.add_item(db_session, user.user_id, item_data)
 
-    # Get expiring within 30 days
     expiring = PantryService.get_expiring_soon(
         db_session, user.user_id, days_threshold=30
     )
 
-    # Should not include item expiring in 5 years
     assert not any(e.pantry_item_id == item.pantry_item_id for e in expiring)
 
 
@@ -500,10 +465,7 @@ def test_waste_very_large_quantity(db_session: Session):
         assert waste.quantity == Decimal("10000")
 
 
-# =============================================================================
 # NULL/EMPTY DATA HANDLING TESTS
-# =============================================================================
-
 
 def test_user_empty_full_name(db_session: Session):
     """

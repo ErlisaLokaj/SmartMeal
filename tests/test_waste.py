@@ -31,9 +31,8 @@ from domain.schemas.waste_schemas import (
 from app.exceptions import NotFoundError, ServiceValidationError
 
 
-# =============================================================================
+
 # WASTE MANAGEMENT FLOW
-# =============================================================================
 
 EXAMPLE_WASTE_FLOW = """
 Waste Management Flow (Use Case 9)
@@ -149,10 +148,7 @@ Benefits:
 """
 
 
-# =============================================================================
 # WASTE LOGGING TESTS
-# =============================================================================
-
 
 def test_log_waste_success(monkeypatch):
     """
@@ -292,10 +288,8 @@ def test_log_waste_validation_error(monkeypatch):
     assert r.status_code == 422
 
 
-# =============================================================================
-# WASTE INSIGHTS TESTS
-# =============================================================================
 
+# WASTE INSIGHTS TESTS
 
 def test_get_waste_insights_success(monkeypatch):
     """
@@ -428,10 +422,8 @@ def test_get_waste_insights_default_horizon(monkeypatch):
     assert body["horizon_days"] == 30
 
 
-# =============================================================================
-# PANTRY INTEGRATION TESTS
-# =============================================================================
 
+# PANTRY INTEGRATION TESTS
 
 def test_waste_log_with_pantry_integration(monkeypatch):
     """

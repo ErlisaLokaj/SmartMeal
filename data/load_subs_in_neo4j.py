@@ -1,22 +1,18 @@
-"""Load substitution pairs into Neo4j from JSON or CSV.
-
-This script reads the substitution_pairs.json file (default location within
-the repo `data/`) and imports `Ingredient` nodes and `SUBSTITUTE_FOR`
-relationships. It batches writes for performance and creates uniqueness
-constraints on `proc_id` and `name` when possible.
-
-Note: for very large JSON files consider using a streaming parser (ijson) to
-reduce memory usage.
+"""Load substitution pairs into Neo4j.
 """
 
 import json
 import os
 from pathlib import Path
-from app.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+#from app.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
+
+NEO4J_URI = "bolt://localhost:7687"
+NEO4J_USER = "neo4j"
+NEO4J_PASSWORD = "neo4jpassword"
 
 try:
     from neo4j import GraphDatabase
-except Exception as e:  # pragma: no cover - driver optional in some envs
+except Exception as e:
     raise RuntimeError(
         "neo4j driver not available. Install with `pip install neo4j` to run this script"
     ) from e
@@ -24,14 +20,13 @@ except Exception as e:  # pragma: no cover - driver optional in some envs
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "substitution_pairs.json"
 if not DATA_PATH.exists():
-    # allow override via env
     DATA_PATH = Path(os.getenv("SUBS_JSON_PATH", str(DATA_PATH)))
 
 driver = GraphDatabase.driver(NEO4J_URI, auth=(NEO4J_USER, NEO4J_PASSWORD))
 
 
 def ensure_constraints(tx):
-    # create proc_id uniqueness and name uniqueness (if not exists)
+    # create proc_id uniqueness and name uniqueness
     tx.run(
         "CREATE CONSTRAINT IF NOT EXISTS FOR (n:Ingredient) REQUIRE n.proc_id IS UNIQUE"
     )
@@ -89,7 +84,7 @@ def main(batch_size: int = 2000):
     with driver.session() as session:
         session.execute_write(ensure_constraints)
 
-        # Load JSON file (streaming naive approach)
+        # Load JSON file
         count = 0
         proc_batch = []
         name_batch = []
@@ -138,7 +133,7 @@ def main(batch_size: int = 2000):
             count += len(name_batch)
 
     driver.close()
-    print(f"Loaded {count} substitution edges into Neo4j successfully ✅")
+    print(f"Loaded {count} substitution edges into Neo4j successfully")
 
 
 if __name__ == "__main__":

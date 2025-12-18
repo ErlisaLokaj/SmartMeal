@@ -2,8 +2,8 @@
 
 import logging
 from typing import List, Dict, Any, Optional
-from uuid import UUID
 from sqlalchemy.orm import Session
+from uuid import UUID
 from datetime import datetime
 
 from domain.models import (
@@ -42,21 +42,9 @@ class ShoppingService:
         3. Load user's current pantry
         4. Calculate difference (needed - available)
         5. Create shopping list with missing items
-
-        Args:
-            db: Database session
-            plan_id: Meal plan UUID
-            user_id: User UUID
-
-        Returns:
-            ShoppingList object with items
-
-        Raises:
-            ValueError: If plan not found or doesn't belong to user
         """
         logger.info(f"Building shopping list for plan {plan_id}, user {user_id}")
 
-        # Initialize repositories
         meal_plan_repo = MealPlanRepository(db)
         meal_entry_repo = MealEntryRepository(db)
         pantry_repo = PantryRepository(db)
@@ -98,8 +86,6 @@ class ShoppingService:
         recipe_repo = RecipeRepository()
         try:
             # Convert recipe_ids back to UUIDs for repository
-            from uuid import UUID
-
             recipe_uuids = [UUID(rid) for rid in recipe_ids]
             aggregated = recipe_repo.aggregate_ingredients(
                 recipe_ids=recipe_uuids, servings_list=servings_list
@@ -192,12 +178,10 @@ class ShoppingService:
                 available_qty = available["quantity"]
                 available_unit = available["unit"]
 
-                # Simple unit matching (should use proper conversion in production)
                 if available_unit == needed_unit:
                     remaining = needed_qty - available_qty
 
                     if remaining > 0:
-                        # Still need more
                         missing.append(
                             {
                                 "ingredient_id": ing_id,
@@ -212,7 +196,6 @@ class ShoppingService:
                             }
                         )
                 else:
-                    # Units don't match - add to list (conservative approach)
                     logger.debug(
                         f"Unit mismatch for {ing_id}: needed {needed_unit}, "
                         f"have {available_unit}"
@@ -231,7 +214,6 @@ class ShoppingService:
                         }
                     )
             else:
-                # Not in pantry at all - need full amount
                 missing.append(
                     {
                         "ingredient_id": ing_id,
@@ -287,7 +269,6 @@ class ShoppingService:
         if not item:
             raise NotFoundError(f"Shopping list item not found: {list_item_id}")
 
-        # Verify the item belongs to the user's shopping list
         shopping_repo = ShoppingListRepository(db)
         shopping_list = shopping_repo.get_by_id(item.list_id)
         if not shopping_list or shopping_list.user_id != user_id:

@@ -1,6 +1,5 @@
 """
 Recommendation routes - Personalized recipe recommendations.
-Implements use case 7 (smart recommendations based on user profile and pantry).
 """
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -29,7 +28,6 @@ def add_user_preferences(
     """
     try:
         for pref in preferences:
-            # Convert strength to uppercase to match database enum values
             strength_upper = pref["strength"].upper()
             db.execute(
                 text(
@@ -59,20 +57,6 @@ def get_recommendations(
 ) -> List[RecipeRecommendation]:
     """
     Get personalized recipe recommendations for a user.
-
-    Algorithm considers:
-    - User's dietary profile (cuisine preferences, goals)
-    - Pantry inventory (prioritizes recipes using available ingredients)
-    - Allergens (excludes recipes with allergic ingredients)
-    - Tag preferences (vegetarian, quick, healthy, etc.)
-    - Diversity (avoids repeating recently cooked recipes)
-
-    Args:
-        user_id: User UUID
-        limit: Maximum number of recommendations (default 10)
-
-    Returns:
-        List of recommended recipes with match scores
     """
     recommendations = RecommendationService.recommend(
         db=db,

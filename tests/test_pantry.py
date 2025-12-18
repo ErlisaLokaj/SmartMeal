@@ -25,9 +25,7 @@ from services.pantry_service import PantryService
 from app.exceptions import NotFoundError
 
 
-# =============================================================================
 # PANTRY MANAGEMENT FLOW
-# =============================================================================
 
 EXAMPLE_PANTRY_FLOW = """
 Pantry Management Flow (Use Case 5)
@@ -161,10 +159,7 @@ Integration Points:
 """
 
 
-# =============================================================================
 # PANTRY CRUD TESTS
-# =============================================================================
-
 
 def test_pantry_endpoints(monkeypatch):
     """
@@ -248,10 +243,7 @@ def test_pantry_endpoints(monkeypatch):
     assert r4.status_code == 200
 
 
-# =============================================================================
 # QUANTITY VALIDATION TESTS
-# =============================================================================
-
 
 def test_pantry_quantity_validation_and_response(monkeypatch):
     """
@@ -321,10 +313,8 @@ def test_pantry_quantity_validation_and_response(monkeypatch):
     assert float(body["quantity"]) == 3.5
 
 
-# =============================================================================
-# QUANTITY UPDATE TESTS
-# =============================================================================
 
+# QUANTITY UPDATE TESTS
 
 def test_update_pantry_quantity_consume(monkeypatch):
     """
@@ -440,10 +430,8 @@ def test_update_pantry_quantity_not_found(monkeypatch):
     assert r.status_code == 404
 
 
-# =============================================================================
-# EXPIRATION TRACKING TESTS
-# =============================================================================
 
+# EXPIRATION TRACKING TESTS
 
 def test_get_expiring_soon(monkeypatch):
     """

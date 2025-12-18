@@ -42,11 +42,7 @@ from domain.schemas.waste_schemas import WasteLogCreate
 from domain.schemas.shopping_schemas import ShoppingListCreate
 
 
-# =============================================================================
 # PROFILE SERVICE TESTS
-# =============================================================================
-
-
 def test_profile_service_create_user(db_session: Session):
     """
     Test ProfileService.create_user() operation.
@@ -341,10 +337,7 @@ def test_profile_service_delete_user(db_session: Session):
     assert not_deleted is False
 
 
-# =============================================================================
 # INGREDIENT SERVICE TESTS
-# =============================================================================
-
 
 def test_ingredient_service_get_or_create(db_session: Session):
     """
@@ -399,10 +392,8 @@ def test_ingredient_service_get_by_id_and_name(db_session: Session):
     assert not_found_name is None
 
 
-# =============================================================================
-# PANTRY SERVICE TESTS
-# =============================================================================
 
+# PANTRY SERVICE TESTS
 
 def test_pantry_service_add_and_get(db_session: Session):
     """
@@ -629,10 +620,8 @@ def test_pantry_service_get_expiring_soon(db_session: Session):
     assert any(e.pantry_item_id == item1.pantry_item_id for e in expiring)
 
 
-# =============================================================================
-# WASTE SERVICE TESTS
-# =============================================================================
 
+# WASTE SERVICE TESTS
 
 def test_waste_service_log_waste(db_session: Session):
     """
@@ -750,10 +739,8 @@ def test_waste_service_build_insights(db_session: Session):
         assert len(insights.most_wasted_ingredients) >= 2
 
 
-# =============================================================================
-# SHOPPING SERVICE TESTS
-# =============================================================================
 
+# SHOPPING SERVICE TESTS
 
 def test_shopping_service_build_list_basic(db_session: Session):
     """

@@ -17,7 +17,6 @@ PGPASSWORD = os.getenv("PGPASSWORD", "postgres")
 
 @lru_cache(maxsize=1)
 def _dsn() -> str:
-    # psycopg2 DSN string
     return (
         f"dbname={PGDATABASE} "
         f"user={PGUSER} "

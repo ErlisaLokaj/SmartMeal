@@ -93,11 +93,7 @@ from services.shopping_service import ShoppingService
 from domain.models import ShoppingList, ShoppingListItem, MealPlan, MealEntry
 from app.exceptions import NotFoundError, ServiceValidationError
 
-
-# =============================================================================
 # SHOPPING LIST CRUD TESTS
-# =============================================================================
-
 
 def test_shopping_list_creation_complete_flow(db_session: Session):
     """
@@ -362,10 +358,8 @@ def test_shopping_list_delete(db_session: Session):
     assert not_deleted is False
 
 
-# =============================================================================
-# SHOPPING LIST EDGE CASES
-# =============================================================================
 
+# SHOPPING LIST EDGE CASES
 
 def test_shopping_list_empty_list(db_session: Session):
     """
@@ -506,10 +500,7 @@ def test_shopping_list_all_items_purchased(db_session: Session):
     assert all(item.checked for item in retrieved.items)
 
 
-# =============================================================================
 # SHOPPING LIST AUTHORIZATION TESTS
-# =============================================================================
-
 
 def test_shopping_list_user_isolation(db_session: Session):
     """

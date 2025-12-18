@@ -21,7 +21,6 @@ logger = logging.getLogger("smartmeal.api.plans")
 def generate_week_plan(body: GeneratePlanRequest, db: Session = Depends(get_db_session)):
     """
     Generate a personalized weekly meal plan for a user.
-
     This endpoint:
     1. Fetches user's pantry and allergies from PostgreSQL
     2. Searches for recipe candidates in MongoDB
@@ -29,9 +28,8 @@ def generate_week_plan(body: GeneratePlanRequest, db: Session = Depends(get_db_s
     4. Applies substitutions if enabled and conflicts are found
     5. Scores recipes based on pantry match and diversity
     6. Creates a meal plan in PostgreSQL
-
     Returns:
-        PlanResponse with plan_id, week_start (Monday), and number of days
+        PlanResponse with plan_id, week_start, and number of days
     """
     try:
         service = PlannerService(db)
@@ -56,7 +54,6 @@ def generate_week_plan(body: GeneratePlanRequest, db: Session = Depends(get_db_s
                 use_substitutions=body.use_substitutions,
             )
         )
-
         return PlanResponse(
             plan_id=plan_id,
             week_start=week_monday,
@@ -65,7 +62,6 @@ def generate_week_plan(body: GeneratePlanRequest, db: Session = Depends(get_db_s
         )
 
     except ValueError as e:
-        # User not found, no candidates, etc.
         logger.warning("Validation error generating plan: %s", e)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND if "not found" in str(e).lower() else status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -89,7 +85,6 @@ def generate_week_plan(body: GeneratePlanRequest, db: Session = Depends(get_db_s
 def list_user_plans(user_id: UUID = Query(..., description="User ID to fetch plans for"), db: Session = Depends(get_db_session)):
     """
     List all meal plans for a specific user.
-
     Returns a list of plans with their start dates and number of meal entries.
     Plans are ordered by start date (most recent first).
     """
@@ -112,7 +107,6 @@ def list_user_plans(user_id: UUID = Query(..., description="User ID to fetch pla
 def get_plan_entries(plan_id: UUID, db: Session = Depends(get_db_session)):
     """
     Get all meal entries for a specific meal plan.
-
     Returns a list of entries ordered by day_index, each containing:
     - meal_entry_id: Unique entry identifier
     - recipe_id: MongoDB recipe ID

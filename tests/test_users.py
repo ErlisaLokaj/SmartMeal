@@ -24,9 +24,8 @@ from services.profile_service import ProfileService
 from app.exceptions import ServiceValidationError
 
 
-# =============================================================================
+
 # USER PROFILE MANAGEMENT FLOW
-# =============================================================================
 
 EXAMPLE_USER_FLOW = """
 User Profile Management Flow (Use Case 1)
@@ -140,10 +139,8 @@ Dietary Preferences & Allergies Flow (Use Case 2)
 """
 
 
-# =============================================================================
-# USER TESTS
-# =============================================================================
 
+# USER TESTS
 
 def test_users_list_and_create_and_get_and_delete(monkeypatch):
     """
@@ -256,10 +253,8 @@ def test_update_profile_service_error(monkeypatch):
     assert r.status_code == 400
 
 
-# =============================================================================
-# DIETARY PROFILE TESTS
-# =============================================================================
 
+# DIETARY PROFILE TESTS
 
 def test_dietary_get_set(monkeypatch):
     """
@@ -309,10 +304,8 @@ def test_dietary_get_set(monkeypatch):
     assert r2.json()["goal"] == dp.goal
 
 
-# =============================================================================
-# PREFERENCES TESTS
-# =============================================================================
 
+# PREFERENCES TESTS
 
 def test_preferences_bulk_and_single(monkeypatch):
     """
@@ -364,10 +357,7 @@ def test_preferences_bulk_and_single(monkeypatch):
     assert r4.status_code == 200
 
 
-# =============================================================================
 # ALLERGY TESTS
-# =============================================================================
-
 
 def test_allergies_bulk_and_single(monkeypatch):
     """

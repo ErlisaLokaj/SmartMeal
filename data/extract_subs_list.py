@@ -36,7 +36,6 @@ for _, row in tqdm(subs.iterrows(), total=len(subs)):
     cat_ing = get_category(ing)
     cat_sub = get_category(sub)
 
-    # Only keep if categories match and are real foods
     if cat_ing != "unknown" and cat_ing == cat_sub:
         valid_rows.append({"ingredient": ing, "substitute": sub})
     else:

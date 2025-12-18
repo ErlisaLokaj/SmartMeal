@@ -11,9 +11,8 @@ _client = None
 _db = None
 
 
-# ------------------ Connection ------------------
 def _get_db():
-    """Lazy init DB connection."""
+    """Init DB connection."""
     global _client, _db
     if _db is not None:
         return _db
@@ -55,10 +54,8 @@ def close():
 
 def get_recipe(recipe_id: str) -> Optional[Dict[str, Any]]:
     """Fetch a single recipe by ID.
-
     Args:
         recipe_id: UUID string
-
     Returns:
         Recipe document or None if not found
     """
@@ -87,29 +84,26 @@ def search_recipes(
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     """Search recipes with filters.
-
     Args:
         query: Text search query (searches title)
         tags: List of tags to match (any)
         exclude_ingredient_ids: Ingredient IDs to exclude (allergies)
         limit: Maximum number of results
-
     Returns:
         List of recipe documents
     """
     if _db is not None:
         try:
             filter_query = {}
-
             # Text search on title
             if query:
                 filter_query["title"] = {"$regex": query, "$options": "i"}
 
-            # Tags filter (match any)
+            # Tags filter
             if tags:
                 filter_query["tags"] = {"$in": tags}
 
-            # Exclude ingredients (for allergies)
+            # Exclude ingredients
             if exclude_ingredient_ids:
                 filter_query["ingredients.ingredient_id"] = {
                     "$nin": exclude_ingredient_ids
@@ -130,10 +124,8 @@ def search_recipes(
 
 def get_recipes_by_ids(recipe_ids: List[str]) -> List[Dict[str, Any]]:
     """Fetch multiple recipes by IDs.
-
     Args:
         recipe_ids: List of recipe UUID strings
-
     Returns:
         List of recipe documents
     """
@@ -152,25 +144,12 @@ def get_recipes_by_ids(recipe_ids: List[str]) -> List[Dict[str, Any]]:
 def aggregate_ingredients(
     recipe_ids: List[str], servings_list: List[float]
 ) -> Dict[str, Dict[str, Any]]:
-    """Aggregate ingredients across multiple recipes.
-
-    This is used for shopping list generation.
-
+    """Aggregate ingredients across multiple recipes for shopping list generation.
     Args:
         recipe_ids: List of recipe IDs
         servings_list: List of serving multipliers (same length as recipe_ids)
-
     Returns:
         Dict mapping ingredient_id to aggregated quantity info:
-        {
-            "ingredient-uuid-1": {
-                "ingredient_id": "uuid",
-                "name": "chicken breast",
-                "total_quantity": 600,
-                "unit": "g",
-                "from_recipes": ["recipe-1", "recipe-3"]
-            }
-        }
     """
     if _db is not None:
         try:
@@ -251,10 +230,9 @@ def get_recipes_using_ingredient(
 
 
 def get_random_recipes(limit: int = 10) -> List[Dict[str, Any]]:
-    """Get random recipes (for recommendations)."""
+    """Get random recipes for recommendations."""
     if _db is not None:
         try:
-            # MongoDB aggregation pipeline for random sampling
             recipes = list(_db.recipes.aggregate([{"$sample": {"size": limit}}]))
             logger.info(f"Retrieved {len(recipes)} random recipes")
             return recipes

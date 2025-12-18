@@ -1,12 +1,8 @@
-#!/usr/bin/env python3
 """
 Sync Neo4j Ingredient nodes with MongoDB ingredient_master UUIDs.
 
 This ensures every Ingredient node in Neo4j has a matching ingredient_id
 from the master ingredient catalog in MongoDB.
-
-Usage:
-    python scripts/sync_neo4j_with_master.py
 """
 
 from pymongo import MongoClient
@@ -16,14 +12,14 @@ import os
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-# --- CONFIG (edit if needed) ---
+
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://smartmeal-mongo:27017")
 MONGO_DB = os.getenv("MONGO_DB", "smartmeal")
 
 NEO4J_URI = os.getenv("NEO4J_URI", "bolt://smartmeal-neo4j:7687")
 NEO4J_USER = os.getenv("NEO4J_USER", "neo4j")
 NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD", "neo4jpassword")
-# -------------------------------
+
 
 
 def main():
@@ -48,7 +44,6 @@ def main():
                 logging.warning(f"Skipping ingredient without UUID: {name}")
                 continue
 
-            # Try to update an existing ingredient by name
             result = session.run(
                 """
                 MATCH (i:Ingredient {name: $name})
@@ -60,7 +55,6 @@ def main():
             ).single()
 
             if result["updated"] == 0:
-                # Optionally create the node if missing in Neo4j
                 session.run(
                     """
                     MERGE (i:Ingredient {name: $name})

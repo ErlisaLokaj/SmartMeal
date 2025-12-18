@@ -1,5 +1,5 @@
 """
-Ingredient Repository - Data access layer for ingredient operations (Neo4j integration)
+Ingredient Repository - Data access layer for ingredient operations
 """
 
 from typing import List, Optional, Dict, Any

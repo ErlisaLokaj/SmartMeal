@@ -1,6 +1,5 @@
 """
 Base repository interface for data access layer.
-This follows the Repository pattern to separate business logic from data access.
 """
 
 from typing import Generic, TypeVar, Optional, List, Type
@@ -24,15 +23,6 @@ class BaseRepository(Generic[ModelType], ABC):
     def get_by_id(self, entity_id: UUID) -> Optional[ModelType]:
         """
         Get entity by ID.
-
-        Note: This is a fallback implementation. Subclasses should override
-        this method with their specific ID field (user_id, pantry_item_id, etc.)
-
-        Args:
-            entity_id: Entity UUID
-
-        Returns:
-            Entity or None if not found
         """
         raise NotImplementedError(
             f"{self.__class__.__name__} must implement get_by_id() with specific ID field"

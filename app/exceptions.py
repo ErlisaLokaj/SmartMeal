@@ -3,12 +3,6 @@ from typing import Any, Mapping, Optional
 
 class ServiceValidationError(Exception):
     """Raised when input data is invalid or a precondition for a service call is not met.
-
-    Attributes:
-        message: human-readable message
-        details: optional mapping with extra context (field errors, validation info)
-        code: optional machine-readable error code
-        http_status: suggested HTTP status code for handlers (400)
     """
 
     http_status = 400
@@ -33,8 +27,6 @@ class ServiceValidationError(Exception):
 
 class NotFoundError(Exception):
     """Raised when a requested resource was not found.
-
-    Attributes are similar to ServiceValidationError. http_status is 404.
     """
 
     http_status = 404
@@ -59,8 +51,6 @@ class NotFoundError(Exception):
 
 class ConflictError(Exception):
     """Raised when a resource conflict occurs (e.g., duplicate entry).
-
-    Attributes are similar to ServiceValidationError. http_status is 409.
     """
 
     http_status = 409
@@ -85,8 +75,6 @@ class ConflictError(Exception):
 
 class UnauthorizedError(Exception):
     """Raised when authentication or authorization fails.
-
-    Attributes are similar to ServiceValidationError. http_status is 401.
     """
 
     http_status = 401

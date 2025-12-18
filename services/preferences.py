@@ -28,7 +28,6 @@ class UserPreferenceService:
                 continue
 
             try:
-                # Convert strength to uppercase to match database enum values
                 strength_upper = strength.upper()
 
                 existing = (

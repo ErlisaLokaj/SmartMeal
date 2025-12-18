@@ -23,15 +23,11 @@ SessionLocal = sessionmaker(bind=engine, future=True)
 
 def init_database():
     """Initialize database schema"""
-    # Ensure required Postgres extensions exist (CITEXT used for case-insensitive email)
     with engine.begin() as conn:
         try:
-            # CREATE EXTENSION requires a superuser or appropriate privileges
             conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS citext;")
             logger.info("PostgreSQL extension 'citext' ensured")
         except Exception as e:
-            # Log warning but don't fail - citext is nice-to-have for case-insensitive emails
-            # The app will still work without it
             logger.warning(
                 f"Could not create citext extension (requires superuser privileges): {e}"
             )

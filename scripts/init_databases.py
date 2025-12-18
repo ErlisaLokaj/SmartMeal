@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Initialize all databases (PostgreSQL, MongoDB, Neo4j)
 Creates schemas, tables, collections, and optionally seeds data
@@ -7,8 +6,13 @@ Creates schemas, tables, collections, and optionally seeds data
 import sys
 import logging
 from pathlib import Path
+from domain.models.database import engine
+from sqlalchemy import inspect
+import subprocess
+import os
+import adapters.graph_adapter as graph_adapter
+from app.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 
-# Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 logging.basicConfig(
@@ -28,10 +32,6 @@ def init_postgresql():
 
         init_database()
         logger.info("✓ PostgreSQL tables created successfully!")
-
-        # Verify tables were created
-        from domain.models.database import engine
-        from sqlalchemy import inspect
 
         inspector = inspect(engine)
         tables = inspector.get_table_names()
@@ -69,9 +69,6 @@ def init_mongodb():
             db.create_collection("recipes")
             logger.info("✓ Created 'recipes' collection")
 
-        # Create indexes for better query performance
-        # Note: _id is already unique by default, no need to create index
-        # Only create indexes if they don't exist to avoid errors
         try:
             db.recipes.create_index("title")
             db.recipes.create_index("cuisine_id")
@@ -81,21 +78,16 @@ def init_mongodb():
         except Exception as e:
             logger.info(f"✓ Indexes already exist or created: {e}")
 
-        # Check if we need to seed recipes
         recipe_count = db.recipes.count_documents({})
         logger.info(f"✓ MongoDB initialized with {recipe_count} recipes")
 
         if recipe_count == 0:
             logger.info("→ No recipes found. Running auto-import...")
-            import subprocess
-            import os
 
-            # Path to the recipe loader script
             script_path = os.path.join(
                 os.path.dirname(__file__), "load_recipes_to_mongo.py"
             )
 
-            # Check if recipes_structured.json exists
             recipes_file = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)),
                 "data",
@@ -103,8 +95,6 @@ def init_mongodb():
             )
 
             if os.path.exists(recipes_file):
-                # Run the recipe loader script in non-interactive mode
-                # We'll modify load_recipes_to_mongo.py to support auto mode
                 result = subprocess.run(
                     [sys.executable, script_path, "--auto"],
                     capture_output=True,
@@ -112,7 +102,6 @@ def init_mongodb():
                 )
 
                 if result.returncode == 0:
-                    # Verify recipes were loaded
                     new_count = db.recipes.count_documents({})
                     logger.info(f"✓ Successfully loaded {new_count} recipes!")
                 else:
@@ -142,10 +131,7 @@ def init_neo4j():
     logger.info("=" * 60)
 
     try:
-        import adapters.graph_adapter as graph_adapter
-        from app.config import NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD
 
-        # Connect to Neo4j
         graph_adapter.connect(NEO4J_URI, NEO4J_USER, NEO4J_PASSWORD)
 
         # Get driver instance
@@ -153,9 +139,7 @@ def init_neo4j():
         if driver is None:
             raise Exception("Failed to connect to Neo4j")
 
-        # Create constraints and indexes
         with driver.session() as session:
-            # Create uniqueness constraint on Ingredient name
             try:
                 session.run(
                     "CREATE CONSTRAINT ingredient_name_unique IF NOT EXISTS "
@@ -165,7 +149,6 @@ def init_neo4j():
             except Exception as e:
                 logger.warning(f"Constraint may already exist: {e}")
 
-            # Create index on category for faster queries
             try:
                 session.run(
                     "CREATE INDEX ingredient_category_idx IF NOT EXISTS "

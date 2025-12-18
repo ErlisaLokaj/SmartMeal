@@ -40,7 +40,6 @@ class PlannerService:
         self.db: Session = db
         self.repository = PlanRepository(db)
 
-    # ---------- candidate fetch ----------
 
     def _fetch_candidates(self, pantry: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
@@ -65,7 +64,6 @@ class PlannerService:
         logger.info("mongo candidates uniq=%d", len(uniq))
         return uniq
 
-    # ---------- conflict resolution with Neo4j ----------
 
     def _resolve_conflicts_with_neo4j(
             self,
@@ -109,7 +107,6 @@ class PlannerService:
         logger.info("Applied %d substitutions successfully", subs_made)
         return True, effective
 
-    # ---------- scoring ----------
 
     def _score_recipe(
             self,
@@ -139,7 +136,6 @@ class PlannerService:
 
         return (pantry_score + diversity_bonus, {"overlap": overlap, "total": total, "cuisine": cuisine})
 
-    # ---------- main ----------
 
     def generate_plan(self, req: PlanRequest) -> uuid.UUID:
         if not self.repository.user_exists(req.user_id):
@@ -208,7 +204,6 @@ class PlannerService:
 
             cuisine = (rdoc.get("cuisine") or rdoc.get("cuisine_id") or "").strip()
 
-            # The first 3 days - we try different cuisines
             if cuisine and cuisine in used_cuisines and len(picks) < 3:
                 continue
 
@@ -219,7 +214,6 @@ class PlannerService:
             if len(picks) >= req.days:
                 break
 
-        # Fallback: If you still don't have enough recipes, take them without taking into account the variety
         if len(picks) < req.days:
             logger.warning("Only %d diverse recipes found, filling with remaining", len(picks))
             for _, rid, _ in scored:
@@ -242,7 +236,6 @@ class PlannerService:
         logger.info("Generated plan %s for user %s with %d entries", plan_id, req.user_id, len(picks))
         return plan_id
 
-    # ---------- queries for API ----------
 
     def list_user_plans(self, user_id: uuid.UUID):
         return self.repository.list_user_plans(user_id)

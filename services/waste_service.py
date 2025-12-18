@@ -5,6 +5,8 @@ import logging
 import uuid
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timedelta
+from services.pantry_service import PantryService
+from decimal import Decimal
 
 from domain.models import WasteLog, AppUser
 from domain.schemas.waste_schemas import (
@@ -27,37 +29,13 @@ class WasteService:
     ) -> Dict[str, Any]:
         """
         PUBLIC validation method - validates waste data before logging.
-        This is a separate step as shown in the sequence diagram.
-
-        Validates and normalizes waste log data, enriches with ingredient metadata.
-
-        Args:
-            ingredient_id: UUID of the ingredient
-            quantity: Quantity of wasted ingredient
-            unit: Unit of measurement
-
-        Returns:
-            Dict with validated and enriched data including:
-            - ingredient_id
-            - quantity
-            - unit (normalized)
-            - ingredient_name (from Neo4j)
-            - category (from Neo4j)
-
-        Raises:
-            ServiceValidationError: If validation fails or ingredient not found
         """
         try:
-            # Validate quantity
             if quantity <= 0:
                 raise ServiceValidationError("Quantity must be greater than 0")
 
-            # Normalize unit (convert to lowercase, trim whitespace)
             normalized_unit = unit.lower().strip() if unit else None
 
-            # Fetch ingredient metadata from Neo4j to:
-            # 1. Validate ingredient exists
-            # 2. Enrich waste log with name and category for better insights
             ingredient_repo = IngredientRepository()
             try:
                 meta = ingredient_repo.get_metadata(str(ingredient_id))
@@ -68,7 +46,6 @@ class WasteService:
                     f"name={ingredient_name}, category={category}"
                 )
             except (RuntimeError, ValueError) as e:
-                # Neo4j unavailable or ingredient not found
                 logger.error(f"Failed to fetch ingredient metadata: {e}")
                 raise ServiceValidationError(f"Invalid ingredient: {str(e)}") from e
 
@@ -89,42 +66,12 @@ class WasteService:
     def validate_normalize(
         ingredient_id: uuid.UUID, quantity: Decimal, unit: str = None
     ) -> Dict[str, Any]:
-        """
-        DEPRECATED: Use validate_waste_data() instead.
-        Kept for backward compatibility.
-        """
         return WasteService.validate_waste_data(ingredient_id, quantity, unit)
 
     @staticmethod
     def log_waste(
         db: Session, user_id: uuid.UUID, waste_data: WasteLogCreate
     ) -> WasteLogResponse:
-        """
-        Log a waste entry for a user with optional pantry integration.
-
-        If pantry_item_id and auto_remove_from_pantry are provided, this will
-        automatically update or remove the item from the user's pantry, ensuring
-        consistency between waste logs and actual pantry inventory.
-
-        Note: Validation should be performed separately using validate_waste_data()
-        before calling this method (as per sequence diagram).
-
-        Args:
-            db: Database session
-            user_id: UUID of the user
-            waste_data: Waste log data (should already be validated)
-                - If pantry_item_id provided: Links waste to specific pantry item
-                - If auto_remove_from_pantry=True: Updates pantry automatically
-
-        Returns:
-            WasteLogResponse with created waste log
-
-        Raises:
-            NotFoundError: If user not found or pantry_item not found (if specified)
-            ServiceValidationError: If validation fails or pantry update fails
-        """
-        from services.pantry_service import PantryService
-        from decimal import Decimal
 
         # Initialize repositories
         user_repo = UserRepository(db)
@@ -135,7 +82,6 @@ class WasteService:
             logger.warning(f"log_waste failed: user {user_id} not found")
             raise NotFoundError(f"User {user_id} not found")
 
-        # For safety, still validate here (defense in depth)
         validated = WasteService.validate_waste_data(
             waste_data.ingredient_id, waste_data.quantity, waste_data.unit
         )
@@ -144,7 +90,6 @@ class WasteService:
         pantry_updated = False
         if waste_data.auto_remove_from_pantry and waste_data.pantry_item_id:
             try:
-                # Attempt to decrement quantity from pantry
                 updated_item = PantryService.update_quantity(
                     db,
                     waste_data.pantry_item_id,
@@ -167,13 +112,13 @@ class WasteService:
                     f"Could not update pantry: item {waste_data.pantry_item_id} not found. "
                     "Continuing with waste log creation."
                 )
-                # Don't fail the waste logging - just log the warning
+
             except ServiceValidationError as e:
                 logger.warning(
                     f"Could not update pantry for waste log: {e}. "
                     "Continuing with waste log creation."
                 )
-                # Don't fail - user might be logging waste of item already consumed
+
 
         # Create waste log entry using repository
         waste_repo = WasteRepository(db)
@@ -201,19 +146,6 @@ class WasteService:
     ) -> WasteInsightsResponse:
         """
         Build waste insights for a user over a specified time horizon.
-
-        Uses batch Neo4j queries to avoid N+1 problem and improve performance.
-
-        Args:
-            db: Database session
-            user_id: UUID of the user
-            horizon_days: Number of days to look back (default: 30)
-
-        Returns:
-            WasteInsightsResponse with aggregated insights
-
-        Raises:
-            NotFoundError: If user not found
         """
         # Initialize repositories
         user_repo = UserRepository(db)

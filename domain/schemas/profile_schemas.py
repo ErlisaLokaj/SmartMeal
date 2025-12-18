@@ -114,7 +114,6 @@ class DietaryProfileResponse(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     """Complete profile update request"""
 
-    # If email is provided for a PUT on a non-existing user, the user will be created.
     email: Optional[EmailStr] = None
 
     full_name: Optional[str] = Field(None, min_length=1, max_length=200)

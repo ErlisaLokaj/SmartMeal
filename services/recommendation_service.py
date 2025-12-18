@@ -26,7 +26,6 @@ class RecommendationService:
         db: Session, user_id: UUID, limit: int = 10, tag_filters: List[str] = None
     ) -> List[dict]:
         """Generate personalized recipe recommendations.
-
         Algorithm:
         1. Get user profile (dietary preferences, allergies, cuisine likes/dislikes)
         2. Get user's pantry items
@@ -38,15 +37,6 @@ class RecommendationService:
            - Pantry ingredient usage
            - Dietary goals
         6. Return top K ranked recipes
-
-        Args:
-            db: Database session
-            user_id: User UUID
-            limit: Maximum number of recommendations
-            tag_filters: Optional list of tags to filter by
-
-        Returns:
-            List of recipe documents with match scores
         """
         logger.info(f"Generating recommendations for user {user_id}")
 
@@ -117,7 +107,6 @@ class RecommendationService:
 
         logger.info(f"Found {len(candidate_recipes)} candidate recipes")
 
-        # Filter out recently cooked recipes for novelty
         candidate_recipes = [
             r
             for r in candidate_recipes
@@ -140,7 +129,6 @@ class RecommendationService:
                         substitutes = ingredient_repo.find_substitutes(
                             str(ing_id), limit=3
                         )
-                        # If ingredient has substitutes, slight bonus for flexibility
                         if substitutes:
                             substitute_score += 5
             except Exception as e:
@@ -156,10 +144,8 @@ class RecommendationService:
                 pantry_ingredient_ids=pantry_ingredient_ids,
             )
 
-            # Add Neo4j substitute bonus
             score += substitute_score
 
-            # Calculate pantry matches
             recipe_ingredient_ids = {
                 ing.get("ingredient_id") for ing in recipe.get("ingredients", [])
             }
@@ -198,20 +184,15 @@ class RecommendationService:
         - Avoid tag: -20 per avoid tag
         - Pantry usage: +5 per pantry ingredient used
         - Diversity bonus: +10 for recipes with unique tags
-
-        Returns:
-            Score (0-100 range typical)
         """
-        score = 50.0  # Base score
+        score = 50.0
 
-        # Cuisine scoring
         recipe_cuisine = recipe.get("cuisine_id", "").lower()
         if any(like.lower() in recipe_cuisine for like in cuisine_likes):
             score += 30
         if any(dislike.lower() in recipe_cuisine for dislike in cuisine_dislikes):
             score -= 50
 
-        # Tag preference scoring
         recipe_tags = [tag.lower() for tag in recipe.get("tags", [])]
 
         for pref_tag in preference_tags:
@@ -222,15 +203,13 @@ class RecommendationService:
             if avoid_tag.lower() in recipe_tags:
                 score -= 20
 
-        # Pantry usage bonus
         recipe_ingredient_ids = {
             ing.get("ingredient_id") for ing in recipe.get("ingredients", [])
         }
         pantry_matches = len(recipe_ingredient_ids & pantry_ingredient_ids)
         score += pantry_matches * 5
 
-        # Diversity bonus (recipes with uncommon tags)
         if len(recipe_tags) > 3:
             score += 10
 
-        return max(0, score)  # Don't return negative scores
+        return max(0, score)

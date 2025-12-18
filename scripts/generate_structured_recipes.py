@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Transform simple recipes into structured format.
 
 Reads recipes_clean.json and converts them to the structured schema.
@@ -10,7 +9,7 @@ import json
 import re
 from pathlib import Path
 
-# Add parent directory to path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from domain.schemas.recipe_schemas import RecipeCreate, SimpleIngredient, SimpleStep
@@ -18,13 +17,8 @@ from domain.schemas.recipe_schemas import RecipeCreate, SimpleIngredient, Simple
 
 def parse_ingredient(ingredient_text):
     """Parse ingredient string into structured format.
-
-    Examples:
-        "1 c. firmly packed brown sugar" -> (1, "cup", "brown sugar", "firmly packed")
-        "1/2 tsp. vanilla" -> (0.5, "tsp", "vanilla", "")
-        "2 Tbsp. butter or margarine" -> (2, "tbsp", "butter or margarine", "")
     """
-    # Common unit mappings
+
     unit_map = {
         "c.": "cup",
         "c": "cup",
@@ -58,15 +52,12 @@ def parse_ingredient(ingredient_text):
         "liter": "l",
     }
 
-    # Try to match: quantity + unit + ingredient name
-    # Pattern: number (with fractions) + optional unit + rest
     pattern = r"^([\d\/\.\s]+)\s*([a-zA-Z\.]+)?\s+(.+)$"
     match = re.match(pattern, ingredient_text.strip())
 
     if match:
         qty_str, unit_str, name = match.groups()
 
-        # Parse quantity (handle fractions like "1/2")
         try:
             if "/" in qty_str:
                 parts = qty_str.strip().split()
@@ -82,13 +73,11 @@ def parse_ingredient(ingredient_text):
         except:
             quantity = 1.0
 
-        # Normalize unit
+
         unit = unit_map.get(unit_str.lower() if unit_str else "", "unit")
 
-        # Clean up name
         name = name.strip()
 
-        # Check for prep notes in parentheses
         prep_note = ""
         paren_match = re.search(r"\(([^)]+)\)", name)
         if paren_match:
@@ -99,7 +88,6 @@ def parse_ingredient(ingredient_text):
             name=name, quantity=quantity, unit=unit, prep_note=prep_note
         )
     else:
-        # Couldn't parse, use defaults
         return SimpleIngredient(
             name=ingredient_text.strip(), quantity=1, unit="unit", prep_note=""
         )
@@ -178,7 +166,6 @@ def infer_tags(title, ingredients, steps):
 
 def infer_servings(title, ingredients, steps):
     """Try to infer serving size from text."""
-    # Look for numbers in steps like "serves 4" or "makes 12 cookies"
     all_text = title + " " + " ".join(ingredients) + " " + " ".join(steps)
 
     serve_match = re.search(r"serves?\s+(\d+)", all_text, re.IGNORECASE)
@@ -195,8 +182,7 @@ def infer_servings(title, ingredients, steps):
 
 def estimate_nutrition(servings, ingredients):
     """Very rough nutrition estimation based on ingredient count and servings."""
-    # This is a placeholder - real nutrition would require a database
-    base_kcal = len(ingredients) * 100  # rough estimate
+    base_kcal = len(ingredients) * 100
     return {
         "kcal": base_kcal // servings,
         "protein_g": 15.0,
@@ -211,21 +197,16 @@ def transform_recipe(simple_recipe):
     ingredients_raw = simple_recipe.get("ingredients", [])
     steps_raw = simple_recipe.get("steps", [])
 
-    # Parse ingredients
     ingredients = [parse_ingredient(ing) for ing in ingredients_raw]
 
-    # Infer metadata
     cuisine = infer_cuisine(title, ingredients_raw)
     tags = infer_tags(title, ingredients_raw, steps_raw)
     servings = infer_servings(title, ingredients_raw, steps_raw)
 
-    # Create steps (estimate 5 min per step if not specified)
     steps = [SimpleStep(text=step_text, duration_min=5) for step_text in steps_raw]
 
-    # Estimate nutrition
     nutrition = estimate_nutrition(servings, ingredients)
 
-    # Create RecipeCreate object
     return RecipeCreate(
         title=title,
         cuisine=cuisine,
@@ -239,7 +220,6 @@ def transform_recipe(simple_recipe):
 
 def main():
     """Main transformation logic."""
-    # Read input file
     input_file = Path(__file__).parent.parent / "data" / "recipes_clean.json"
     output_file = Path(__file__).parent.parent / "data" / "recipes_structured.json"
 
@@ -253,7 +233,6 @@ def main():
 
     print(f"Transforming {len(simple_recipes)} recipes...")
 
-    # Transform all recipes
     structured_recipes = []
     errors = []
 
@@ -269,12 +248,10 @@ def main():
         except Exception as e:
             errors.append((idx, simple_recipe.get("name", "Unknown"), str(e)))
 
-    # Write output
     print(f" Writing {len(structured_recipes)} recipes to {output_file}")
     with open(output_file, "w") as f:
         json.dump(structured_recipes, f, indent=2, default=str)
 
-    # Summary
     print("\n" + "=" * 60)
     print(f"Successfully transformed: {len(structured_recipes)} recipes")
     if errors:

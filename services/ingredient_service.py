@@ -4,6 +4,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 import logging
 from uuid import UUID
+from datetime import datetime, timedelta
 
 from domain.models.ingredient import Ingredient
 from repositories.ingredient_sql_repository import IngredientSQLRepository
@@ -18,15 +19,9 @@ class IngredientService:
     def get_or_create_ingredient(db: Session, name: str) -> Ingredient:
         """
         Get existing ingredient by name, or create if it doesn't exist.
-
-        This is the key method - it ensures we always use the same UUID
-        for the same ingredient name.
         """
         ingredient_repo = IngredientSQLRepository(db)
         ingredient = ingredient_repo.get_or_create(name)
-
-        # Log only if it was newly created (we can tell by checking if commit happened)
-        # Since get_or_create handles logging internally via commit, we can skip extra logging
         return ingredient
 
     @staticmethod
@@ -43,17 +38,6 @@ class IngredientService:
 
     @staticmethod
     def bulk_import_from_mongo(db: Session):
-        """
-        DEPRECATED: Use scripts/migrate_ingredients_from_mongo.py instead.
-
-        Import all unique ingredients from MongoDB to PostgreSQL.
-
-        This is a one-time migration that can be triggered via API.
-        Safe to run multiple times - won't create duplicates.
-
-        NOTE: This method is kept for backward compatibility but should be
-        removed in future versions. Use the standalone migration script instead.
-        """
         from adapters import mongo_adapter
 
         logger.info("Starting bulk import from MongoDB")
@@ -71,19 +55,15 @@ class IngredientService:
         ingredient_repo = IngredientSQLRepository(db)
 
         for ing_doc in ingredients_mongo:
-            name = ing_doc.get("_id")  # Name is in _id field
+            name = ing_doc.get("_id")
 
             if not name:
                 stats["errors"] += 1
                 continue
 
-            # Use get_or_create to avoid duplicates
             ingredient = ingredient_repo.get_or_create(name)
 
             if ingredient:
-                # Check if this is new or existing by checking creation time
-                from datetime import datetime, timedelta
-
                 if (
                     datetime.utcnow() - ingredient.created_at.replace(tzinfo=None)
                 ) < timedelta(seconds=1):
@@ -104,8 +84,6 @@ class IngredientService:
     def sync_all_recipes_to_master(db: Session):
         """
         Update ALL MongoDB recipes to use ingredient_ids from PostgreSQL master table.
-
-        This fixes the inconsistent UUID problem.
         """
         from adapters import mongo_adapter
 

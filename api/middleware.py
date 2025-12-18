@@ -20,11 +20,8 @@ from app.exceptions import ServiceValidationError, NotFoundError
 logger = logging.getLogger("smartmeal.middleware")
 
 
-# ============================================================================
+
 # Helper Functions
-# ============================================================================
-
-
 def make_serializable(obj):
     """Convert objects to JSON-serializable format"""
     if isinstance(obj, Decimal):
@@ -36,11 +33,8 @@ def make_serializable(obj):
     return obj
 
 
-# ============================================================================
+
 # Request Logging Middleware
-# ============================================================================
-
-
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """Middleware to log all HTTP requests and responses"""
 
@@ -101,16 +95,11 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             raise
 
 
-# ============================================================================
 # Error Handlers
-# ============================================================================
-
-
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle Pydantic validation errors"""
     logger.warning(f"Validation error on {request.url}: {exc.errors()}")
 
-    # Convert errors to JSON-serializable format (handles Decimal, etc.)
     serializable_errors = make_serializable(exc.errors())
 
     return JSONResponse(

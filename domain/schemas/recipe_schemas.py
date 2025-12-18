@@ -90,7 +90,7 @@ class Recipe(BaseModel):
             self.slug = self.title.lower().replace(" ", "-").replace("'", "")
 
 
-# Simplified creation models for easier recipe building
+
 class SimpleIngredient(BaseModel):
     """Simplified ingredient input."""
 
@@ -160,9 +160,6 @@ class RecipeCreate(BaseModel):
         )
 
 
-# Add these to the existing recipe_schemas.py file
-
-
 class RecipeRecommendation(BaseModel):
     """Recipe recommendation response."""
 
@@ -176,8 +173,8 @@ class RecipeRecommendation(BaseModel):
     cuisine: str = Field(default="International", alias="cuisine_id")
     ingredients_count: int
     total_time_min: int = 0
-    match_score: float = 0.0  # How well it matches user preferences
-    pantry_match_count: int = 0  # How many pantry items it uses
+    match_score: float = 0.0
+    pantry_match_count: int = 0
 
     @classmethod
     def from_recipe(
@@ -208,4 +205,4 @@ class RecommendationRequest(BaseModel):
 
     user_id: UUID
     limit: int = Field(default=10, ge=1, le=50)
-    tags: Optional[List[str]] = None  # Optional tag filters
+    tags: Optional[List[str]] = None

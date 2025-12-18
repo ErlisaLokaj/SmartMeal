@@ -1,15 +1,4 @@
-#!/usr/bin/env python3
 """Idempotent Neo4j seeder script.
-
-Usage examples:
-  python scripts/seed_neo4j.py --file data/substitution_pairs.json --uri bolt://localhost:7687 --user neo4j --password neo4jpassword
-
-Good practices implemented:
-- Idempotent writes using MERGE and constraints
-- Batching with UNWIND for efficient writes
-- Streaming JSON support via ijson when available, fallback to json
-- Configurable via CLI flags or env vars
-- Clear exit codes and logging
 """
 import argparse
 import json
@@ -45,7 +34,6 @@ def chunked(iterator: Iterator, size: int) -> Iterator[List]:
 
 
 def ensure_constraints(tx):
-    # Create constraints that make MERGE idempotent (Neo4j 4+ syntax)
     logger.info("Ensuring constraints")
     # tx.run(
     #   "CREATE CONSTRAINT IF NOT EXISTS FOR (i:Ingredient) REQUIRE (i.proc_id) IS UNIQUE"
@@ -59,8 +47,6 @@ def ensure_constraints(tx):
 
 
 def write_batch(tx, batch: List[Dict]):
-    # Each item expected to have: name, proc_id (optional), substitutes: list of dicts with name/proc_id
-    # We build a parameterized UNWIND payload to MERGE nodes and relationships.
     pairs = []
     for item in batch:
         # Support two formats:
@@ -101,8 +87,7 @@ def write_batch(tx, batch: List[Dict]):
     if not pairs:
         return
 
-    # UNWIND pairs and MERGE Ingredient nodes by proc_id when present otherwise by name
-    # Create or update nodes; set both proc_id and id when available and set shelf_life_days if present in pair
+
     query = """
     UNWIND $pairs AS p
     MERGE (b:Ingredient {name: p.base_name})

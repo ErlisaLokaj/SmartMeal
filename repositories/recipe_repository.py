@@ -65,11 +65,9 @@ class RecipeRepository:
         Returns:
             List of recipe documents
         """
-        # Convert UUIDs to strings for MongoDB
+
         ingredient_id_strs = [str(iid) for iid in ingredient_ids]
 
-        # Use search with ingredient filter
-        # Note: This is a simple implementation - could be enhanced with scoring
         recipes = []
         for ingredient_id in ingredient_id_strs:
             found = mongo_adapter.get_recipes_using_ingredient(
@@ -77,7 +75,6 @@ class RecipeRepository:
             )
             recipes.extend(found)
 
-        # Remove duplicates (recipes with multiple matching ingredients)
         seen = set()
         unique_recipes = []
         for recipe in recipes:

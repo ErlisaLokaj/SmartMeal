@@ -35,7 +35,7 @@ def get_save_me_first_suggestions(
     db: Session = Depends(get_db),
 ):
     """
-    **Get save-me-first suggestions to prevent food waste.**
+    Get save-me-first suggestions to prevent food waste.
 
     This endpoint helps users reduce food waste by:
     1. Identifying pantry items expiring soon

@@ -41,19 +41,16 @@ def _dummy_create_engine(*args, **kwargs):
 
 sqlalchemy.create_engine = _dummy_create_engine
 
-# Import models and disable their init_database so TestClient startup is safe.
 import domain.models as db_models
 
 db_models.init_database = lambda: None
 
-# Restore original create_engine in case other imports need it
 if _real_create_engine is not None:
     sqlalchemy.create_engine = _real_create_engine
 
 from fastapi.testclient import TestClient
 from main import app
 
-# Create TestClient after we've disabled DB init
 client = TestClient(app)
 
 
@@ -140,7 +137,6 @@ def make_pantry_item(
         ...     best_before=date.today() + timedelta(days=2)
         ... )
     """
-    # Default expiration: 7 days from now (realistic for many foods)
     if best_before is None:
         best_before = date.today() + timedelta(days=7)
 
@@ -208,10 +204,7 @@ def make_waste_log(
     )
 
 
-# =============================================================================
 # DATABASE SESSION FIXTURE FOR INTEGRATION TESTS
-# =============================================================================
-
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -238,12 +231,10 @@ def db_session() -> Generator[Session, None, None]:
     engine = create_engine(settings.postgres_db_url)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-    # Create session
     session = SessionLocal()
 
     try:
         yield session
     finally:
-        # Rollback any changes made during the test
         session.rollback()
         session.close()

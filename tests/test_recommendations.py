@@ -24,9 +24,8 @@ from test_fixtures import client, make_user
 from services.profile_service import ProfileService
 
 
-# =============================================================================
+
 # RECOMMENDATION FLOW
-# =============================================================================
 
 EXAMPLE_RECOMMENDATION_FLOW = """
 Recipe Recommendation Flow (Use Case 7)
@@ -164,10 +163,8 @@ Data Flow for Recommendations
 """
 
 
-# =============================================================================
-# RECOMMENDATION TESTS
-# =============================================================================
 
+# RECOMMENDATION TESTS
 
 def test_recommendations_endpoint(monkeypatch):
     """

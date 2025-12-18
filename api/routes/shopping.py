@@ -29,8 +29,6 @@ def create_shopping_list(
     """
     Create a shopping list from a meal plan.
 
-    This implements Use Case 6: Create Shopping List
-
     Algorithm:
     1. Load meal entries from the plan
     2. Aggregate ingredients across all recipes (from MongoDB)
@@ -38,13 +36,6 @@ def create_shopping_list(
     4. Calculate missing = needed - available
     5. Create shopping list with missing items
 
-    Example request:
-    ```json
-    {
-        "plan_id": "123e4567-e89b-12d3-a456-426614174000",
-        "user_id": "123e4567-e89b-12d3-a456-426614174001"
-    }
-    ```
     """
     try:
         shopping_list = ShoppingService.build_list(
@@ -72,7 +63,6 @@ def get_shopping_list(
 ):
     """
     Get a shopping list by ID.
-
     The shopping list must belong to the specified user.
     """
     shopping_list = ShoppingService.get_shopping_list(
@@ -96,7 +86,6 @@ def get_user_shopping_lists(
 ):
     """
     Get all shopping lists for a user.
-
     Returns lists ordered by creation date (newest first).
     """
     shopping_lists = ShoppingService.get_user_shopping_lists(
@@ -114,14 +103,6 @@ def update_shopping_list_item(
 ):
     """
     Update a shopping list item (check it off or add a note).
-
-    Example request:
-    ```json
-    {
-        "checked": true,
-        "note": "Get organic version"
-    }
-    ```
     """
     item = ShoppingService.update_item_status(
         db=db, list_item_id=list_item_id, checked=update.checked, note=update.note
@@ -144,7 +125,6 @@ def delete_shopping_list(
 ):
     """
     Delete a shopping list.
-
     The shopping list must belong to the specified user.
     """
     success = ShoppingService.delete_shopping_list(

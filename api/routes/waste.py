@@ -25,30 +25,8 @@ def log_waste(
 ):
     """
     Log a waste entry for a user.
-
-    This endpoint implements the improved waste logging flow from the sequence diagram:
-    1. Validate schema with Pydantic (automatic)
-    2. Validate and normalize waste data (separate step)
-    3. Enrich with ingredient metadata from Neo4j
-    4. Verify user exists
-    5. Insert waste log into PostgreSQL
-    6. Return saved waste log
-
-    Args:
-        waste_data: Waste log data (ingredient_id, quantity, unit, reason)
-        user_id: UUID of the user logging the waste
-        db: Database session (injected)
-
-    Returns:
-        WasteLogResponse with the created waste log
-
-    Raises:
-        400: If validation fails
-        404: If user not found
-        500: Internal server error
     """
-    # Step 1: Validate and normalize waste data (separate from persistence)
-    # This enriches the data with ingredient name and category from Neo4j
+    # Step 1: Validate and normalize waste data
     validated_data = WasteService.validate_waste_data(
         waste_data.ingredient_id, waste_data.quantity, waste_data.unit
     )
@@ -77,32 +55,6 @@ def get_waste_insights(
 ):
     """
     Get waste insights for a user over a specified time horizon.
-
-    This endpoint implements the improved insights flow from the sequence diagram:
-    1. Verify user exists
-    2. Query PostgreSQL for waste logs within horizon
-    3. Extract unique ingredient IDs
-    4. Batch fetch ingredient metadata from Neo4j (optimized - no N+1 problem)
-    5. Aggregate totals, by ingredient, by category, trends, reasons
-    6. Calculate percentages
-    7. Return comprehensive insights
-
-    Args:
-        user_id: UUID of the user
-        horizon: Number of days to look back (default: 30, max: 365)
-        db: Database session (injected)
-
-    Returns:
-        WasteInsightsResponse with comprehensive waste insights including:
-        - Total waste count and quantity
-        - Most wasted ingredients (with names from Neo4j)
-        - Waste by category (from Neo4j metadata)
-        - Waste trends over time (by week)
-        - Common waste reasons (top 5)
-
-    Raises:
-        404: If user not found
-        500: Internal server error
     """
     logger.info(f"Fetching waste insights for user {user_id}, horizon={horizon} days")
 

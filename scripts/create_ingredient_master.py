@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Create ingredient_master collection from recipes.
 This script extracts all unique ingredients from the recipes collection
@@ -8,14 +7,13 @@ and populates the ingredient_master collection.
 import logging
 import os
 from pymongo import MongoClient
+from pymongo import UpdateOne
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger("create_ingredient_master")
 
-# --- CONFIG ---
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://smartmeal-mongo:27017")
 MONGO_DB = os.getenv("MONGO_DB", "smartmeal")
-# --------------
 
 
 def main():
@@ -40,11 +38,10 @@ def main():
 
     logger.info("Extracting unique ingredients from recipes...")
 
-    # Pipeline to extract all ingredient names
     pipeline = [
         {"$unwind": "$ingredients"},
         {"$group": {"_id": "$ingredients.name"}},
-        {"$project": {"_id": 1}},  # _id is the ingredient name
+        {"$project": {"_id": 1}},
     ]
 
     unique_ingredients = list(db.recipes.aggregate(pipeline))
@@ -54,15 +51,11 @@ def main():
         logger.warning("No ingredients found in recipes.")
         return
 
-    # Prepare operations for bulk write
-    # We use update_one with upsert=True to avoid duplicates and preserve existing data
-    from pymongo import UpdateOne
 
     operations = []
     for doc in unique_ingredients:
         name = doc["_id"]
         if name:
-            # Clean the name
             name = name.strip().lower()
             operations.append(
                 UpdateOne({"_id": name}, {"$set": {"_id": name}}, upsert=True)
@@ -73,7 +66,6 @@ def main():
         result = db.ingredient_master.bulk_write(operations)
         logger.info(f"Bulk write result: {result.bulk_api_result}")
 
-        # Create index on _id (default) and maybe others if needed
         logger.info("ingredient_master populated successfully")
     else:
         logger.info("No operations to perform")
