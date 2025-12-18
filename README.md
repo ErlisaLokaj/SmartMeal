@@ -139,7 +139,7 @@ SmartMeal follows a layered backend design (API → Services → Domain → Repo
 - **MongoDB**: recipes as hierarchical JSON-like documents 
 - **Neo4j**: substitutions and ingredient relationship graph 
 
- ![Architecture](./diagram/high_level_system_architecture.svg)
+ ![High_Level_Architecture](./diagram/high_level_system_architecture.svg)
 
 ### 1. **App Layer** (`app/`)
 
