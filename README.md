@@ -1,10 +1,69 @@
 # SmartMeal 
-SmartMeal is an intelligent meal planning system that integrates SQL, NoSQL, and Graph databases to create personalized weekly meal plans based on user preferences, available ingredients, and nutritional goals.
+
+[![Architecture](https://img.shields.io/badge/Architecture-Polyglot%20Persistence-purple)](https://martinfowler.com/bliki/PolyglotPersistence.html)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Relational-blue)](https://www.postgresql.org/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Document-green)](https://www.mongodb.com/)
+[![Neo4j](https://img.shields.io/badge/Neo4j-Graph-red)](https://neo4j.com/)
+
+SmartMeal is a backend system for intelligent meal planning that demonstrates how **polyglot persistence** can be used to solve real-world coordination problems across heterogeneous data sources.  
+It integrates **PostgreSQL**, **MongoDB**, and **Neo4j** to support personalized meal planning, smart ingredient substitutions, pantry-aware shopping lists, and expiration-aware recommendations.
+---
+
+## Table of Contents
+1. [Project Overview](#project-overview)
+2. [Example: Pantry-Aware Weekly Meal Plan](#example-pantry-aware-weekly-meal-plan)
+3. [Directory Organization](#directory-organization)
+4. [Architecture](#architecture)
+5. [Design Principles](#design-principles)
+6. [Import Conventions](#import-conventions)
+7. [Running Scripts](#running-scripts)
+8. [Testing](#testing)
+9. [Further Reading](#further-reading)
+
+---
+## Project Overview
+
+Meal planning workflows are often fragmented across separate tools (recipes, grocery lists, and diet tracking). This forces users to manually reconcile information, increasing effort and contributing to avoidable food waste.
+
+SmartMeal consolidates these workflows into one backend system and uses different database technologies for what they do best:
+
+- **PostgreSQL** for transactional user, pantry, and inventory state  
+- **MongoDB** for flexible recipe documents  
+- **Neo4j** for ingredient substitution relationships and graph traversal
+
+---
+
+## Example: Pantry-Aware Weekly Meal Plan
+
+This example illustrates how SmartMeal coordinates data across multiple databases to generate a weekly meal plan.
+
+**Request**
+```http
+POST /plans
+Content-Type: application/json
+
+{
+  "user_id": "234c1cd7-98ad-4a2a-bbcc-88df4e204138",
+  "week_start": "2025-11-10",
+  "days": 5,
+  "use_substitutions": true
+  
+}
+```
+**Response**
+```json
+{
+	"plan_id": "414c70ef-4b37-4f2a-8523-98d95587873f",
+	"week_start": "2025-11-10",
+	"days": 5,
+	"message": "Weekly plan successfully generated."
+}
+```
 
 ## Directory Organization
 
 ```
-smartmeal/
+SmartMeal/
 │
 ├── app/                   # Core application configuration
 │   ├── config.py          # Application settings (Pydantic)
@@ -70,7 +129,15 @@ smartmeal/
 └── README.md               # Project documentation
 ```
 
-## Architecture Layers
+## Architecture
+
+SmartMeal follows a layered backend design (API → Services → Domain → Repositories/Adapters) and orchestrates three databases behind a unified API.
+
+- **PostgreSQL**: user profiles, pantry inventory, waste logs 
+- **MongoDB**: recipes as hierarchical JSON-like documents 
+- **Neo4j**: substitutions and ingredient relationship graph 
+
+ ![Architecture](./diagram/high_level_system_architecture.svg)
 
 ### 1. **App Layer** (`app/`)
 
