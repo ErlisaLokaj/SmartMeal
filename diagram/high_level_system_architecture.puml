@@ -8,6 +8,7 @@ actor Client #E8E8E8
 
 rectangle "API Layer\n(FastAPI)" as API #85EFFF
 rectangle "Service Layer\n(Business Logic)" as Service #82F5CB
+rectangle "Domain Layer\n(Business Entities)" as Domain #F5C1DC
 rectangle "Repository & Adapter Layer\n(Data Access)" as Repo #F3F582
 
 database "PostgreSQL\nUser & Pantry Data" as PG #7AB6F5
@@ -16,7 +17,8 @@ database "Neo4j\nIngredient Graph" as Graph #DA83F2
 
 Client --> API
 API --> Service
-Service --> Repo
+Service --> Domain
+Domain --> Repo
 
 Repo --> PG
 Repo --> Mongo
